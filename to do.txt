@@ -1,0 +1,140 @@
+dodawanie edycja usuwanie notatek, filtrowanie notatek,
+szyfrowanie notatek po stronie serwera jak i klienta, kosz dla notatek, 
+wyszukiwanie w notatkach, eksportowanie notatek do pliku 
+
+dobra trzeba zacząć od początku i rozbudowywać powoli
+
+Zadania i plan rozwoju aplikacji "Encrypted Notepad"
+
+Poniżej znajduje się rozszerzona i uporządkowana lista funkcji — 
+pierwsze 5 to MUST HAVE (priorytet najwyższy). 
+Dla każdego punktu dodałem podzadania, kryteria akceptacji i krótkie uwagi o edge-case'ach i bezpieczeństwie.
+CRUDE - CREATE READ UPDATE DELETE ENCRYPT
+---
+
+MUST HAVE (pierwsze 5)
+
+1) CRUD notatek i kosz
+- Co zawiera:
+    - API: POST /notes, GET /notes, GET /notes/{id}, PUT /notes/{id}, DELETE /notes/{id}
+    - Kosz: GET /trash, POST /trash/{id}/restore, DELETE /trash/{id}/permanent
+    - Walidacje: tytuł, maksymalna długość treści, ograniczenia załączników
+    - Metadane: created_at, updated_at, owner_id, is_encrypted, version
+    - Automatyczne czyszczenie kosza (notatki starsze niż 30 dni)
+- Podzadania:
+    - Zaprojektować model danych (notes, attachments, metadata)
+    - Implementacja CRUD z autoryzacją (auth) i testami
+    - Obsługa upload/download załączników (limity, typy)
+    - Background job do permanentnego usuwania po 30 dniach
+    - Testy jednostkowe i integracyjne
+- Kryteria akceptacji:
+    - Można utworzyć/edytować/usunąć/przywrócić notatkę przez API i UI
+    - Notatki w koszu są widoczne i usuwane automatycznie po 30 dniach
+- Uwagi / edge cases:
+    - Równoległe edycje (konflikty) — prosty LWW lub wersjonowanie
+    - Uprawnienia: użytkownik widzi tylko swoje notatki
+
+2) Baza danych i szyfrowanie po stronie serwera
+- Co zawiera:
+    - Schemat DB: notes, users, tags, attachments, audit_logs
+    - Szyfrowanie pól: treść + ewentualne wrażliwe metadane (aplikacyjne AES-GCM)
+    - Key management: KMS / env + rotacja kluczy
+- Podzadania:
+    - Wybrać DB (Postgres produkcja, SQLite dev)
+    - Implementować encrypt/decrypt w warstwie modelu
+    - Dodać migracje, backupy zaszyfrowane i testy przywracania
+    - Zaplanować rotację kluczy i procedury awaryjne
+- Kryteria akceptacji:
+    - Treść notatki nie przechowywana jako plaintext w DB
+    - Klucze poza repozytorium, możliwość rotacji
+- Uwagi:
+    - Utrata klucza = utrata danych (backup kluczy przez email )
+
+3) Filtrowanie i tagi
+- Co zawiera:
+    - System tagów many-to-many, CRUD tagów
+    - Filtry: tagi, data, folder, status (kosz), zaszyfrowane/nie
+    - Paginacja, sortowanie, sugestie tagów
+- Podzadania:
+    - Model tagów i API do przypisywania
+    - UI: multi-select tagów, saved filters
+    - Indeksy DB dla wydajności
+- Kryteria akceptacji:
+    - Możliwość filtrowania po jednym/wielu tagach z paginacją
+- Edge cases:
+    - Rozróżnienie tagów między użytkownikami (scope: per-user)
+
+4) Wyszukiwanie pełnotekstowe
+- Co zawiera:
+    - Full-text search (Postgres FTS lub zewnętrzny silnik jak Typesense)
+    - Indeksowanie przy zapisie, ranking, highlighting/snippety
+    - Wyszukiwanie po tytule, treści, tagach
+- Podzadania:
+    - Wybrać silnik i wdrożyć indeksowanie
+    - Implementować zapytania z rankingiem i podświetlaniem
+    - Zaimplementować asynchroniczne reindexy i testy wydajności
+- Kryteria akceptacji:
+    - Trafne wyniki i akceptowalny czas odpowiedzi na testowym zbiorze
+- Uwagi:
+    - Zaszyfrowane notatki nie będą indeksowane (użytkownik powinien znać ograniczenia)
+
+5) Szyfrowanie po stronie klienta (E2E)
+- Co zawiera:
+    - Opcjonalne szyfrowanie lokalne przed wysyłką: serwer przechowuje tylko ciphertext
+    - Mechanizmy derivacji klucza (Argon2/PBKDF2) i bezpieczna wymiana kluczy przy udostępnianiu
+- Podzadania:
+    - MVP: szyfrowanie z hasłem lokalnie oraz odszyfrowanie w kliencie
+    - UX: onboarding z ostrzeżeniem o utracie danych gdy zapomni się hasła
+    - Dokumentacja kompromisów (brak wyszukiwalności, backupy)
+- Kryteria akceptacji:
+    - Użytkownik może włączyć tryb E2E; serwer nie ma dostępu do plaintextu
+- Uwagi:
+    - Zapomniane hasło = utrata dostępu; wyraźnie komunikować to użytkownikowi
+
+---
+
+FAZA 2 / OPCJONALNE (mniejsze priorytety)
+
+6) Synchronizacja między urządzeniami
+- Delta sync API, conflict resolution (LWW lub CRDT), offline-first, push (websocket)
+
+7) Udostępnianie notatek
+- Invite przez email / link+token, role (owner/editor/viewer), audyt, opcje przy E2E (wymiana kluczy)
+
+8) Eksport / Import notatek
+- Format: Markdown, HTML, DOCX, PDF; batch export, szyfrowane archiwum zip
+
+9) Sprawdzanie pisowni i ulepszony edytor
+- Edytor: TipTap/ProseMirror/CKEditor, lokalny spellchecker, podgląd Markdown, autosave
+
+10) Backup i polityka retencji
+- Harmonogram backupów, testy przywracania, zaszyfrowane backupy
+
+11) UX, dostępność i mobile
+- Responsywność, WCAG, tryb ciemny, PWA (opcjonalnie), lokalizacja
+
+12) Testy, CI/CD i monitoring
+- Unit, integration, E2E tests; GitHub Actions; lint; monitoring (Sentry/Prometheus)
+
+---
+
+Krótkie kontrakty (przykładowe) — pomocne przy implementacji pierwszych endpointów:
+- CRUD notatek:
+    - Input: token + payload {title, body, tags, attachments}
+    - Output: 201 + JSON {id, meta}
+    - Error modes: 400 walidacja, 401 brak auth, 413 payload za duży
+- DB + szyfrowanie:
+    - Input: plaintext
+    - Output: ciphertext zapisany w DB + iv/metadata
+    - Error modes: brak klucza -> operacja zablokowana
+
+Następne kroki (możesz wybrać):
+- A) Rozbić pierwsze MUST HAVE na szczegółowe taski (issue checklist + estymaty)
+- B) Wygenerować schemat bazy danych (np. SQLAlchemy/Django models/Prisma)
+- C) Szkic prototypowego backendu (FastAPI/Django) z CRUD + kosz
+
+Napisz, którą opcję chcesz (A, B lub C) oraz jaki stack preferujesz (np. Django vs FastAPI, Postgres vs SQLite). 
+
+---
+
+Plik zaktualizowany automatycznie.

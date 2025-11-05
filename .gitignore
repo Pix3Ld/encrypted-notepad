@@ -1,0 +1,7 @@
+.qodo/
+to do.txt
+.venv
+.vscode
+.VSCodeCounter
+__pycache__/
+*.pyc

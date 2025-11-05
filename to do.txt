@@ -130,11 +130,10 @@ Krótkie kontrakty (przykładowe) — pomocne przy implementacji pierwszych endp
 
 Następne kroki (możesz wybrać):
 - A) Rozbić pierwsze MUST HAVE na szczegółowe taski (issue checklist + estymaty)
-- B) Wygenerować schemat bazy danych (np. SQLAlchemy/Django models/Prisma)
+- B) Wygenerować schemat bazy danych (np. Django models/Prisma)
 - C) Szkic prototypowego backendu (FastAPI/Django) z CRUD + kosz
 
-Napisz, którą opcję chcesz (A, B lub C) oraz jaki stack preferujesz (np. Django vs FastAPI, Postgres vs SQLite). 
+Napisz, którą opcję chcesz (A, B lub C) oraz jaki stack preferujesz (np. Django, Postgres). 
 
 ---
-
-Plik zaktualizowany automatycznie.
+FastAPI Postgres

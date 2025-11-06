@@ -5,3 +5,4 @@ to do.txt
 .VSCodeCounter
 __pycache__/
 *.pyc
+testing.py

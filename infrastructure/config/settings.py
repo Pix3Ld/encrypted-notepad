@@ -1,0 +1,1 @@
+'''tu potem będzie pobieranie kluczy env narazie jest hardcodowane i genrowane przez fernet'''

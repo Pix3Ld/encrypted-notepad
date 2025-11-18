@@ -1,2 +1,0 @@
-uvicorn presentation.main:app --reload
-do odpalenia apki

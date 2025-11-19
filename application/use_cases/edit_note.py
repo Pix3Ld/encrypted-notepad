@@ -7,6 +7,7 @@ class EditNoteUseCase:
         self.encryption = encryption
 
     async def execute(self, note_id: int, new_local_encrypted_content: str) -> str:
+        '''Edytuje istniejącą notatkę o podanym ID, aktualizując jej zawartość'''
         existing_note = await self.repo.get_note_by_id(note_id)
         if not existing_note:
             return "nie ma notatki"

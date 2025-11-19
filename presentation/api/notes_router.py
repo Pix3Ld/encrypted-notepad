@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+import base64
+from typing import Optional
 
 from application.use_cases.create_note import CreateNoteUseCase
 from application.use_cases.get_note import GetNoteUseCase
@@ -23,45 +25,119 @@ delete_note_use_case=NoteDeleteUseCase(repo)
 class NoteIn(BaseModel):
     content: str  # zaszyfrowany lokalnie tekst
 
+
+class NoteEdit(BaseModel):
+    client_private_key_b64: str  # base64-encoded client private key used to decrypt existing package
+    new_plaintext: str  # nowa treść (plaintext) którą zapiszemy i ponownie zaszyfrujemy
+
+
 class NoteOut(BaseModel):
     id: int
-    content: str  # po odszyfrowaniu serwerowym (nadal zaszyfrowany lokalnie)
+    plaintext: str  # po odszyfrowaniu serwerowym (nadal zaszyfrowany lokalnie)  
 
-@router.post("/", response_model=NoteOut)
+@router.post("/")
 async def create(note_in: NoteIn):
     '''wstaw notatke/i na server'''
-    note = await create_use_case.execute(note_in.content)
-    return {"id": note.id, "content": note.content.decode()}
+    client_priv, client_pub = encryption_service.generate_nacl_keypair()#tworzy klucz klienta
+    
+    lokalny_pakiet_szyfrowany= encryption_service.encrypt_for_recipient(note_in.content,client_pub)
+    lokalny_pakiet=lokalny_pakiet_szyfrowany.decode()
+    
+    note = await create_use_case.execute(lokalny_pakiet)
+    
+    return {
+        "id": note.id, 
+        "client_private_key": base64.b64encode(client_priv).decode(),
+        "client_public_key": base64.b64encode(client_pub).decode(),
+        "server encrypted": note.content.decode(),
+        "local_encrypted": lokalny_pakiet,
+        }
 
-@router.get("/{note_id}", response_model=NoteOut)
-async def get(note_id: int):
+
+@router.get("/{note_id}")#pobierz konkretną notke
+async def get(note_id: int,klucz_prywatny:str):
     '''pobieranie notatek'''
+    # pobierz lokalnie zaszyfrowaną zawartość (serwer odszyfrował swoją warstwę)
     content = await get_use_case.execute(note_id)
+
     if content is None:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
-    return {"id": note_id, "content": content}
+    bity_klucza_priv= base64.b64decode(klucz_prywatny)
+    # klient odszyfrowuje pakiet hybrydowy
+    try:
+        text = encryption_service.decrypt_with_private(content.encode(),bity_klucza_priv)
+    except Exception as e:
+        raise HTTPException(status_code=400,detail=f"odszyfrowanie nie powiodło się: {e}")
+    
+    return {
+        "id": note_id,
+        "plaintext": text
+        }
 
-@router.put("/{note_id}",response_model=NoteOut)
-async def update_note(note_id:int, note_in:NoteIn):
-    '''async edit endpoint'''
-    update_content= await edit_use_case.execute(note_id,note_in.content)
-    if update_content is None:
+
+@router.patch("/{note_id}")
+async def update_note(note_id: int, edit: NoteEdit):
+    """Edit flow:
+    - Pobiera zapisany lokalny pakiet (po odszyfrowaniu serwerowym).
+    - Próbuje odszyfrować go podanym `client_private_key_b64` aby zweryfikować prawo do edycji.
+    - Jeśli klucz poprawny, bierze `new_plaintext`, wygeneruje nową parę NaCl,
+      zaszyfruje `new_plaintext` lokalnie (hybrydowo) i zapisze wynik na serwerze (serwerowa warstwa Fernet).
+    - Zwraca nowy prywatny klucz klienta (base64), publiczny klucz (base64) i nowy lokalny pakiet (str).
+    - client_private_key_b64 - tutaj wstaw stary klucz prywatny z orginalnej notatki
+    """
+    # Pobierz aktualny lokalny pakiet
+    local_pkg = await get_use_case.execute(note_id)
+    if local_pkg is None or local_pkg == "None":
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
-    return {"id": note_id, "content": update_content}
 
-@router.delete("/{note_id}")
+    # Odszyfruj istniejący pakiet klienta przy użyciu podanego prywatnego klucza
+    try:
+        priv_bytes = base64.b64decode(edit.client_private_key_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid base64 for client_private_key_b64")
+
+    try:
+        _current_plain = encryption_service.decrypt_with_private(local_pkg.encode(), priv_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"client decryption failed: {e}")
+
+    # Używamy new_plaintext jako treści do zapisania
+    new_plaintext = edit.new_plaintext
+
+    # Generujemy nową parę kluczy klienta i szyfrujemy plaintext lokalnie
+    new_priv, new_pub = encryption_service.generate_nacl_keypair()
+    new_local_package_bytes = encryption_service.encrypt_for_recipient(new_plaintext, new_pub)
+    new_local_package = new_local_package_bytes.decode()
+
+    # Zapisz: edit_use_case oczekuje lokalnego pakietu jako string
+    updated_note = await edit_use_case.execute(note_id, new_local_package)
+    if updated_note is None:
+        raise HTTPException(status_code=500, detail="failed to update note")
+
+    return {
+        "id": note_id,
+        "new_client_private_key_b64": base64.b64encode(new_priv).decode(),
+        "new_client_public_key_b64": base64.b64encode(new_pub).decode(),
+        "new_local_encrypted": new_local_package,
+        "plaintext_saved": new_plaintext,
+    }
+
+@router.delete("/{note_id}")#usuń
 async def delete_note(note_id:int):
     success=await delete_note_use_case.execute(note_id)
     if not success:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
     return {"message":"Notatka została usunięta"}
 
-@router.get("/", response_model=list[NoteOut])
+@router.get("/")#pobierz wszystko
 async def get_all_notes():
     """Pobiera wszystkie notatki (tylko do celów testowych)"""
     all_notes = await repo.get_all()
     result = []
+    if not all_notes:
+        raise HTTPException(status_code=404)
     for note in all_notes:
         decrypted_content = await get_use_case.execute(note.id)
+
         result.append({"id": note.id, "content": decrypted_content})
     return result

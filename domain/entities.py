@@ -3,3 +3,8 @@ from dataclasses import dataclass
 class Note:
     id:int
     content:bytes #dla lepszego bezpieczeństwa danych 
+
+@dataclass
+class trash:
+    id:int
+    content:bytes

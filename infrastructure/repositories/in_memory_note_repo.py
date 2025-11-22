@@ -56,3 +56,10 @@ class InMemoryTrashRepository(TrashRepository,InMemoryNoteRepository):
             self._trashed.remove(restored_note)
             self._notes.append(restored_note)
         return None
+    async def delete_trashed_note_permanently(self, note_id: int) -> bool:
+        '''permanenta kasacja z kosza'''
+        trashed_note=await self.get_trashed_note_by_id(note_id)
+        if trashed_note:
+            self._trashed.remove(trashed_note)
+            return True
+        return False

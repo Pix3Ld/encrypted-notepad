@@ -1,4 +1,5 @@
-from domain.entities import Note, trash
+from domain.entities import Note, Trash
+import time
 from domain.interfaces import NoteRepository, TrashRepository
 
 class TrashNoteUseCase:
@@ -10,7 +11,8 @@ class TrashNoteUseCase:
         '''usuń notatkę i przenieś ją do kosza'''
         note=await self.note_repo.get_note_by_id(note_id)
         if note:
-            await self.trash_can.add_to_trash(note)
+            trashed = Trash(id=note.id, content=note.content, trashed_at=time.time())
+            await self.trash_can.add_to_trash(trashed)
             await self.note_repo.delete_notes(note_id)
             return True
         return False

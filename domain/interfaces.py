@@ -1,4 +1,4 @@
-from .entities import Note
+from .entities import Note, Trash
 from typing import List, Optional
 from abc import ABC, abstractmethod
 
@@ -25,20 +25,20 @@ class NoteRepository(ABC):
     pass
 class TrashRepository(ABC):
     @abstractmethod
-    async def add_to_trash(self, trashed_note: Note) -> None:
-        """notka do kosza"""
+    async def add_to_trash(self, trashed_note: Trash) -> None:
+        """Dodaj notatkę do kosza (powinna zawierać `trashed_at`)."""
         pass
     @abstractmethod
-    async def get_trashed_note_by_id(self, note_id: int) -> Optional[Note]:
-        """zgarnij notkę po id"""
+    async def get_trashed_note_by_id(self, note_id: int) -> Optional[Trash]:
+        """Zwróć obiekt `Trash` z kosza po `note_id`."""
         pass
     @abstractmethod
-    async def get_all_trashed(self) -> List[Note]:
-        """zgarnij wsztko z kosza"""
+    async def get_all_trashed(self) -> List[Trash]:
+        """Zwróć listę obiektów `Trash` przechowywanych w koszu."""
         pass
     @abstractmethod
     async def restore_note_from_trash(self, note_id: int) -> Optional[Note]:
-        """zwróć notkę """
+        """Przywróć notatkę z kosza i zwróć ją jako `Note` (bez `trashed_at`)."""
         pass
     @abstractmethod
     async def delete_trashed_note_permanently(self, note_id: int) -> bool:

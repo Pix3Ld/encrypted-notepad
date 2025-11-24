@@ -1,5 +1,5 @@
 from typing import List, Optional
-from domain.entities import Note
+from domain.entities import Note, Trash
 from domain.interfaces import NoteRepository, TrashRepository
 
 class InMemoryNoteRepository(NoteRepository):
@@ -36,29 +36,34 @@ class InMemoryNoteRepository(NoteRepository):
 class InMemoryTrashRepository(TrashRepository,InMemoryNoteRepository):
     def __init__(self) -> None:
         '''in_memory storage dla kosza'''
-        self._trashed=[]
-
-    async def add_to_trash(self, trashed_note: Note) -> None:
-        '''dodaj do kosza'''
+        # initialize parent storage for notes
+        InMemoryNoteRepository.__init__(self)
+        self._trashed: List[Trash] = []
+    async def add_to_trash(self, trashed_note: Trash) -> None:
+        '''dodaj do kosza (przechowujemy obiekt Trash zawierający trashed_at)'''
         self._trashed.append(trashed_note)
 
-    async def get_trashed_note_by_id(self, note_id: int) -> Note | None:
-        '''pobieraa z kosza'''
-        return next((n for n in self._trashed if n.id == note_id) , None)
-    
-    async def get_all_trashed(self) -> List[Note]:
-        '''wypluj wszystko co jest w koszu == output'''
+    async def get_trashed_note_by_id(self, note_id: int) -> Optional[Trash]:
+        '''pobiera notatkę z kosza po id''' 
+        return next((n for n in self._trashed if n.id == note_id), None)
+
+    async def get_all_trashed(self) -> List[Trash]:
+        '''zwróć wszystkie notatki w koszu'''
         return self._trashed
+
     async def restore_note_from_trash(self, note_id: int) -> Optional[Note]:
-        '''przywróć z kosza'''
-        restored_note = await self.get_trashed_note_by_id(note_id)
-        if restored_note:
-            self._trashed.remove(restored_note)
-            self._notes.append(restored_note)
+        '''przywróć notatkę z kosza jako Note (usuń z kosza, dodaj do _notes)'''
+        restored = await self.get_trashed_note_by_id(note_id)
+        if restored:
+            self._trashed.remove(restored)
+            note = Note(id=restored.id, content=restored.content)
+            self._notes.append(note)
+            return note
         return None
+
     async def delete_trashed_note_permanently(self, note_id: int) -> bool:
-        '''permanenta kasacja z kosza'''
-        trashed_note=await self.get_trashed_note_by_id(note_id)
+        '''permanentne usunięcie notatki z kosza'''
+        trashed_note = await self.get_trashed_note_by_id(note_id)
         if trashed_note:
             self._trashed.remove(trashed_note)
             return True

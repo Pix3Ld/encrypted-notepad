@@ -1,8 +1,12 @@
 from domain.interfaces import TrashRepository
-import time
 from typing import Optional
+import time
 
-
+''' 
+na potem:
+    - jak zrobisz bazę na dokerze to dodaj tam cron który będzie wykonywał ten skrypt co x(30 dni) czasu
+    - prawdopodobnie będzie trzeba go doinstalować do obrazu
+'''
 class Delete_X_Time:
     """serwis do permanentnego usuwania notatek z kosza po określonym czasie.
 
@@ -27,7 +31,7 @@ class Delete_X_Time:
         if trashed is None:
             return False
 
-        trashed_at: Optional[float] = getattr(trashed, "trashed_at", None)
+        trashed_at: Optional[float] = getattr(trashed, "trashed_at", None)# pobierz czas przeniesienia do kosza o ile istnieje
         if trashed_at is None:
             return False
 

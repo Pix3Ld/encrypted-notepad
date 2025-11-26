@@ -3,7 +3,7 @@ from application.services.encryption_service import EncryptionService
 
 class TrashGetterUseCase:
     def __init__(self,trash_can:TrashRepository,dencryption:EncryptionService):
-        '''konstruktor'''
+        '''zobacz co usunołeś'''
         self._trash_can=trash_can
         self._encryption=dencryption
     

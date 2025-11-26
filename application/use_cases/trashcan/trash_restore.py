@@ -2,7 +2,7 @@ from domain.interfaces import NoteRepository,TrashRepository
 
 class TrashRestoreUseCase:
     def __init__(self,note:NoteRepository,trash:TrashRepository):
-        '''konstruktor'''
+        '''przywraca note z kosza spowrotem do note_repo'''
         self._note=note
         self._trash=trash
     async def execute(self,note_id:int)->bool:

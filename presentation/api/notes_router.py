@@ -1,6 +1,7 @@
+import base64
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import base64
 from typing import Optional
 
 from application.use_cases.create_note import CreateNoteUseCase
@@ -8,19 +9,37 @@ from application.use_cases.get_note import GetNoteUseCase
 from application.use_cases.edit_note import EditNoteUseCase
 from application.use_cases.delete_note import NoteDeleteUseCase
 
+from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
+from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
+from application.use_cases.trashcan.trash_restore import TrashRestoreUseCase
+from application.use_cases.trashcan.trash_perament import PermamentDelitionUseCase
+
 from application.services.encryption_service import EncryptionService
+from application.services.self_delete_x_time import Delete_X_Time
+
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
+from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
 from infrastructure.config.settings import settings
 
 router=APIRouter(prefix="/notes",tags=["notes"])
 
-#dependesy init
-repo=InMemoryNoteRepository()
+# Dependency init
+note_repo = InMemoryNoteRepository()
+trash_repo = InMemoryTrashRepository()
 encryption_service = EncryptionService(settings.SERVER_KEY)
-create_use_case = CreateNoteUseCase(repo, encryption_service)
-get_use_case = GetNoteUseCase(repo, encryption_service)
-edit_use_case = EditNoteUseCase(repo,encryption_service)
-delete_note_use_case=NoteDeleteUseCase(repo)
+
+# Note use cases
+create_use_case = CreateNoteUseCase(note_repo, encryption_service)
+get_use_case = GetNoteUseCase(note_repo, encryption_service)
+edit_use_case = EditNoteUseCase(note_repo, encryption_service)
+delete_note_use_case = NoteDeleteUseCase(note_repo)
+
+# Trash use cases
+trash_note_use_case = TrashNoteUseCase(note_repo, trash_repo)
+trash_getter_use_case = TrashGetterUseCase(trash_repo, encryption_service)
+trash_restore_use_case = TrashRestoreUseCase(note_repo, trash_repo)
+permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
+self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
 # Schemy FastAPI
 class NoteIn(BaseModel):
     content: str  # zaszyfrowany lokalnie tekst
@@ -132,7 +151,7 @@ async def delete_note(note_id:int):
 @router.get("/")#pobierz wszystko
 async def get_all_notes():
     """Pobiera wszystkie notatki (tylko do celów testowych)"""
-    all_notes = await repo.get_all()
+    all_notes = await note_repo.get_all()
     result = []
     if not all_notes:
         raise HTTPException(status_code=404)

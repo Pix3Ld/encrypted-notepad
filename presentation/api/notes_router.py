@@ -1,5 +1,4 @@
 import base64
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -7,7 +6,7 @@ from typing import Optional
 from application.use_cases.create_note import CreateNoteUseCase
 from application.use_cases.get_note import GetNoteUseCase
 from application.use_cases.edit_note import EditNoteUseCase
-from application.use_cases.delete_note import NoteDeleteUseCase
+
 
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
@@ -32,7 +31,6 @@ encryption_service = EncryptionService(settings.SERVER_KEY)
 create_use_case = CreateNoteUseCase(note_repo, encryption_service)
 get_use_case = GetNoteUseCase(note_repo, encryption_service)
 edit_use_case = EditNoteUseCase(note_repo, encryption_service)
-delete_note_use_case = NoteDeleteUseCase(note_repo)
 
 # Trash use cases
 trash_note_use_case = TrashNoteUseCase(note_repo, trash_repo)
@@ -50,23 +48,21 @@ class NoteEdit(BaseModel):
     new_plaintext: str  # nowa treść (plaintext) którą zapiszemy i ponownie zaszyfrujemy
 
 
-class NoteOut(BaseModel):
-    id: int
-    plaintext: str  # po odszyfrowaniu serwerowym (nadal zaszyfrowany lokalnie)  
-
 @router.post("/")
 async def create(note_in: NoteIn):
     '''wstaw notatke/i na server'''
-    client_priv, client_pub = encryption_service.generate_nacl_keypair()#tworzy klucz klienta
+    client_priv, client_pub = encryption_service.generate_nacl_keypair()  # tworzy klucz klienta
+    client_priv_b64 = base64.b64encode(client_priv).decode()
     
     lokalny_pakiet_szyfrowany= encryption_service.encrypt_for_recipient(note_in.content,client_pub)
     lokalny_pakiet=lokalny_pakiet_szyfrowany.decode()
     
-    note = await create_use_case.execute(lokalny_pakiet)
+    # Pass private key to use case so it gets stored in the note
+    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64)
     
     return {
         "id": note.id, 
-        "client_private_key": base64.b64encode(client_priv).decode(),
+        "client_private_key": client_priv_b64,
         "client_public_key": base64.b64encode(client_pub).decode(),
         "server encrypted": note.content.decode(),
         "local_encrypted": lokalny_pakiet,
@@ -125,38 +121,64 @@ async def update_note(note_id: int, edit: NoteEdit):
 
     # Generujemy nową parę kluczy klienta i szyfrujemy plaintext lokalnie
     new_priv, new_pub = encryption_service.generate_nacl_keypair()
+    new_priv_b64 = base64.b64encode(new_priv).decode()
+
     new_local_package_bytes = encryption_service.encrypt_for_recipient(new_plaintext, new_pub)
     new_local_package = new_local_package_bytes.decode()
 
-    # Zapisz: edit_use_case oczekuje lokalnego pakietu jako string
-    updated_note = await edit_use_case.execute(note_id, new_local_package)
+    # Zapisz: edit_use_case oczekuje lokalnego pakietu jako string i nowego klucza
+    updated_note = await edit_use_case.execute(note_id, new_local_package, new_client_private_key_b64=new_priv_b64)
     if updated_note is None:
         raise HTTPException(status_code=500, detail="failed to update note")
 
     return {
         "id": note_id,
-        "new_client_private_key_b64": base64.b64encode(new_priv).decode(),
+        "new_client_private_key_b64": new_priv_b64,
         "new_client_public_key_b64": base64.b64encode(new_pub).decode(),
         "new_local_encrypted": new_local_package,
         "plaintext_saved": new_plaintext,
     }
 
-@router.delete("/{note_id}")#usuń
-async def delete_note(note_id:int):
-    success=await delete_note_use_case.execute(note_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Notatka nie istnieje")
-    return {"message":"Notatka została usunięta"}
 
 @router.get("/")#pobierz wszystko
 async def get_all_notes():
-    """Pobiera wszystkie notatki (tylko do celów testowych)"""
+    """Pobiera wszystkie notatki (tylko do celów testowych w produkcji będzie dozwolone ale po zalogowaniu(account locked))"""
     all_notes = await note_repo.get_all()
     result = []
     if not all_notes:
         raise HTTPException(status_code=404)
     for note in all_notes:
         decrypted_content = await get_use_case.execute(note.id)
+        prive_key=base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
+        try:
+            decrypted_content = encryption_service.decrypt_with_private(decrypted_content.encode(), prive_key) if prive_key else "No private key stored"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło ")
+        result.append(
+            {
+            "id": note.id, 
+            "content": decrypted_content,
+            "private_key": note.key_private_b64
+            }
+            )
+    return result
+@router.delete("/{note_id}")#usuń
+async def delete_note(note_id:int):
+    success = await trash_note_use_case.execute(note_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Notatka nie istnieje")
+    return {"message":"Notatka została przeniesiona do kosza"}
 
-        result.append({"id": note.id, "content": decrypted_content})
+@router.get("/trash/")
+async def get_trashed_notes():
+    '''pobiera notatki znajdujące się w koszu'''
+    trashed = await trash_repo.get_all_trashed()
+    result = []
+    for note in trashed:
+        decrypt = await trash_getter_use_case.execute(note.id)
+        result.append({
+            "id": note.id,
+            "content": decrypt,
+            "trashed_at": note.trashed_at
+        })
     return result

@@ -1,11 +1,11 @@
 from typing import List, Optional
-from domain.entities import Note, Trash
-from domain.interfaces import NoteRepository, TrashRepository
+from domain.entities import Note
+from domain.interfaces import NoteRepository
 
 class InMemoryNoteRepository(NoteRepository):
     def __init__(self):
         '''a tu jest pamięc naszej bazy danych in_memory'''
-        self._notes = []#in_memory storage dla naszych notatek (to jest za postgresa narazie)
+        self._notes: List[Note]=[]#in_memory storage dla naszych notatek (to jest za postgresa narazie)
 
     async def add_note(self, note: Note) -> None: #to dodaje do in_memory storage
         '''dodaj do bazy(temp bazy) notatke'''

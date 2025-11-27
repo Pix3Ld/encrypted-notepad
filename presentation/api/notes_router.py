@@ -182,3 +182,27 @@ async def get_trashed_notes():
             "trashed_at": note.trashed_at
         })
     return result
+
+@router.post("/trash/restore/{note_id}")
+async def restore_trashed(note_id:int):
+    '''przywraca z kosza do notes'''
+    to_restore = await trash_restore_use_case.execute(note_id)
+    if to_restore is None:
+        raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu")
+    return "Notatka została przywrócona z kosza"
+
+@router.delete("/trash/permanent/{note_id}")
+async def permament_deletion(note_id:int):
+    '''manualne permamentne usuwanie z kosza'''
+    result = await permament_delete_use_case.execute(note_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu")
+    return "usunięto na stałe(a to długi okres czasu)"
+
+@router.delete("/trash/after_time/{note_id}")
+async def auto_delete(id_note:int):
+    '''testowanie automatycznego usuwania '''
+    to_perma= await self_delete_service.execute(id_note)
+    if not to_perma:
+        raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu lub czas nie minął")
+    return "notatka usunięta autoamtycznie"

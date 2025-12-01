@@ -175,11 +175,17 @@ async def get_trashed_notes():
     trashed = await trash_repo.get_all_trashed()
     result = []
     for note in trashed:
-        decrypt = await trash_getter_use_case.execute(note.id)
+        decrypted = await trash_getter_use_case.execute(note.id)
+        privkey=base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
+        try:
+            decrypt= encryption_service.decrypt_with_private(decrypted.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
         result.append({
             "id": note.id,
             "content": decrypt,
-            "trashed_at": note.trashed_at
+            "trashed_at": note.trashed_at,
+            "private_key": note.key_private_b64
         })
     return result
 

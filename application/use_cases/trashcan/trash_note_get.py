@@ -1,6 +1,6 @@
 from domain.interfaces import TrashRepository
 from application.services.encryption_service import EncryptionService
-
+import base64
 class TrashGetterUseCase:
     def __init__(self,trash_can:TrashRepository,dencryption:EncryptionService):
         '''zobacz co usunołeś'''

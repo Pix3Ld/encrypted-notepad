@@ -14,7 +14,7 @@ class TrashNoteUseCase:
         '''usuń notatkę z note_repo i przenieś ją do trash_repo'''
         note = await self.note_repo.get_note_by_id(note_id)
         if note:
-            trashed = Trash(id=note.id, content=note.content, trashed_at=time.time())
+            trashed = Trash(id=note.id, content=note.content, trashed_at=time.time(), key_private_b64=note.key_private_b64)
             await self.trash_repo.add_to_trash(trashed)
             await self.note_repo.delete_notes(note_id)
             return True

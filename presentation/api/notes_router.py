@@ -44,7 +44,6 @@ class NoteIn(BaseModel):
 
 
 class NoteEdit(BaseModel):
-    client_private_key_b64: str  # base64-encoded client private key used to decrypt existing package
     new_plaintext: str  # nowa treść (plaintext) którą zapiszemy i ponownie zaszyfrujemy
 
 
@@ -91,7 +90,7 @@ async def get(note_id: int,klucz_prywatny:str):
 
 
 @router.patch("/{note_id}")
-async def update_note(note_id: int, edit: NoteEdit):
+async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
     """Edit flow:
     - Pobiera zapisany lokalny pakiet (po odszyfrowaniu serwerowym).
     - Próbuje odszyfrować go podanym `client_private_key_b64` aby zweryfikować prawo do edycji.
@@ -107,7 +106,7 @@ async def update_note(note_id: int, edit: NoteEdit):
 
     # Odszyfruj istniejący pakiet klienta przy użyciu podanego prywatnego klucza
     try:
-        priv_bytes = base64.b64decode(edit.client_private_key_b64)
+        priv_bytes = base64.b64decode(key_priv)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid base64 for client_private_key_b64")
 

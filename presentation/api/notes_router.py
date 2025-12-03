@@ -49,7 +49,13 @@ class NoteEdit(BaseModel):
 
 @router.post("/")
 async def create(note_in: NoteIn):
-    '''wstaw notatke/i na server'''
+    ''' tworzy notatkę:
+    - generuje parę kluczy NaCl (prywatny i publiczny) dla klienta
+    - szyfruje zawartość notatki lokalnie (hybrydowo) przy użyciu klucza publicznego klienta
+    - przekazuje zaszyfrowaną zawartość do CreateNoteUseCase wraz z kluczem prywatnym klienta (base64)
+    - zwraca ID notatki, klucz prywatny klienta (base64), klucz publiczny klienta (base64), zaszyfrowaną zawartość serwera i lokalnie
+    
+    '''
     client_priv, client_pub = encryption_service.generate_nacl_keypair()  # tworzy klucz klienta
     client_priv_b64 = base64.b64encode(client_priv).decode()
     
@@ -70,7 +76,11 @@ async def create(note_in: NoteIn):
 
 @router.get("/{note_id}")#pobierz konkretną notke
 async def get(note_id: int,klucz_prywatny:str):
-    '''pobieranie notatek'''
+    '''pobieranie notatek dla wskazanego ID:
+    - Pobiera zaszyfrowaną lokalnie zawartość notatki (po odszyfrowaniu serwerowym).
+    - Odszyfrowuje lokalny pakiet przy użyciu podanego `klucz_prywatny` (base64).
+    - Zwraca ID notatki i odszyfrowany tekst (plaintext).
+    '''
     # pobierz lokalnie zaszyfrowaną zawartość (serwer odszyfrował swoją warstwę)
     content = await get_use_case.execute(note_id)
 
@@ -141,7 +151,10 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
 
 @router.get("/")#pobierz wszystko
 async def get_all_notes():
-    """Pobiera wszystkie notatki (tylko do celów testowych w produkcji będzie dozwolone ale po zalogowaniu(account locked))"""
+    """Pobiera wszystkie notatki (tylko do celów testowych w produkcji będzie dozwolone ale po zalogowaniu(account locked)):
+    - Pobiera wszystkie notatki z repozytorium.
+    - Dla każdej notatki odszyfrowuje lokalny pakiet przy użyciu przechowywanego klucza prywatnego (jeśli dostępny).
+    """
     all_notes = await note_repo.get_all()
     result = []
     if not all_notes:
@@ -163,6 +176,10 @@ async def get_all_notes():
     return result
 @router.delete("/{note_id}")#usuń
 async def delete_note(note_id:int):
+    '''przenosi notatkę do kosza
+    - usuwa notatkę z repozytorium notatek
+    - dodaje notatkę do repozytorium kosza z aktualnym timestampem
+    '''
     success = await trash_note_use_case.execute(note_id)
     if not success:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
@@ -170,7 +187,11 @@ async def delete_note(note_id:int):
 
 @router.get("/trash/")
 async def get_trashed_notes():
-    '''pobiera notatki znajdujące się w koszu'''
+    '''pobiera notatki znajdujące się w koszu
+    - pobiera wszystkie notatki z repozytorium kosza
+    - dla każdej notatki odszyfrowuje lokalny pakiet przy użyciu przechowywanego klucza prywatnego (jeśli dostępny)
+    - zwraca listę notatek z ich ID, odszyfrowaną zawartością, czasem przeniesienia do kosza i kluczem prywatnym (base64)
+    '''
     trashed = await trash_repo.get_all_trashed()
     result = []
     for note in trashed:
@@ -190,7 +211,10 @@ async def get_trashed_notes():
 
 @router.post("/trash/restore/{note_id}")
 async def restore_trashed(note_id:int):
-    '''przywraca z kosza do notes'''
+    '''przywraca z kosza do notes
+    - usuwa notatkę z repozytorium kosza
+    - dodaje notatkę z powrotem do repozytorium notatek wraz z oryginalnymi danymi czyli kluczami i zawartością
+    '''
     to_restore = await trash_restore_use_case.execute(note_id)
     if to_restore is None:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu")
@@ -206,7 +230,11 @@ async def permament_deletion(note_id:int):
 
 @router.delete("/trash/after_time/{note_id}")
 async def auto_delete(id_note:int):
-    '''testowanie automatycznego usuwania '''
+    '''testowanie automatycznego usuwania 
+    - sprawdza czy notatka o podanym ID istnieje w koszu i czy minął czas TTL(data ważności)
+    - jeśli tak, usuwa notatkę na stałe z repozytorium kosza
+    - zwraca komunikat o sukcesie lub błąd 404 jeśli notatka nie istnieje lub czas nie minął
+    '''
     to_perma= await self_delete_service.execute(id_note)
     if not to_perma:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu lub czas nie minął")

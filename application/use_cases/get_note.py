@@ -12,4 +12,11 @@ class GetNoteUseCase:
         note = await self.repo.get_note_by_id(note_id)
         if not note:
             return "None"  # Używamy None zamiast stringa dla spójności
-        return self.encryption.decryptserver(note.content)
+        return self.encryption.decryptserver(note.content)  # zwróci odszyfrowaną zawarotść 
+    async def title_execute(self,note_id:int)-> str:
+        '''odszyfrowanie notatki o podanym id'''
+        note = await self.repo.get_note_by_id(note_id)
+        if not note:
+            return "None"  # Używamy None zamiast stringa dla spójności
+        return self.encryption.decryptserver(note.title)  # zwróci odszyfrowaną zawarotść 
+    

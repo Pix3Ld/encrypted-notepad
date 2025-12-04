@@ -62,16 +62,20 @@ async def create(note_in: NoteIn):
     client_priv_b64 = base64.b64encode(client_priv).decode()
     
     lokalny_pakiet_szyfrowany= encryption_service.encrypt_for_recipient(note_in.content,client_pub)
+    lokalny_title_szyfrowany=encryption_service.encrypt_for_recipient(note_in.title,client_pub)
     lokalny_pakiet=lokalny_pakiet_szyfrowany.decode()
+    lokalny_title=lokalny_title_szyfrowany.decode()
     
     # Pass private key to use case so it gets stored in the note
-    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64, title=note_in.title, tags=note_in.tags)
+    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64, title=lokalny_title,tags=note_in.tags)
     
     return {
         "id": note.id, 
         "client_private_key": client_priv_b64,
         "client_public_key": base64.b64encode(client_pub).decode(),
         "server encrypted": note.content.decode(),
+        "title":note.title.decode(),
+        "tags":note.tags,
         "local_encrypted": lokalny_pakiet,
         }
 
@@ -81,10 +85,12 @@ async def get(note_id: int,klucz_prywatny:str):
     '''pobieranie notatek dla wskazanego ID:
     - Pobiera zaszyfrowaną lokalnie zawartość notatki (po odszyfrowaniu serwerowym).
     - Odszyfrowuje lokalny pakiet przy użyciu podanego `klucz_prywatny` (base64).
-    - Zwraca ID notatki i odszyfrowany tekst (plaintext).
+    - Zwraca ID notatki i odszyfrowany tekst (content).
     '''
     # pobierz lokalnie zaszyfrowaną zawartość (serwer odszyfrował swoją warstwę)
     content = await get_use_case.execute(note_id)
+    title = await get_use_case.title_execute(note_id)
+    tag = await note_repo.get_note_by_id(note_id)
 
     if content is None:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
@@ -92,17 +98,20 @@ async def get(note_id: int,klucz_prywatny:str):
     # klient odszyfrowuje pakiet hybrydowy
     try:
         text = encryption_service.decrypt_with_private(content.encode(),bity_klucza_priv)
+        file_name = encryption_service.decrypt_with_private(title.encode(),bity_klucza_priv)
     except Exception as e:
         raise HTTPException(status_code=400,detail=f"odszyfrowanie nie powiodło się: {e}")
     
     return {
         "id": note_id,
-        "plaintext": text
+        "content": text,
+        "title": file_name,
+        "tags": tag.tags if tag is not None else None,
         }
 
 
 @router.patch("/{note_id}")
-async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
+async def update_note(note_id: int, edit: NoteEdit,key_priv:str,new_title: str |None=None ,new_tags: str |None=None): #wywalenie optional z tag u tytułu
     """Edit flow:
     - Pobiera zapisany lokalny pakiet (po odszyfrowaniu serwerowym).
     - Próbuje odszyfrować go podanym `client_private_key_b64` aby zweryfikować prawo do edycji.
@@ -111,8 +120,15 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
     - Zwraca nowy prywatny klucz klienta (base64), publiczny klucz (base64) i nowy lokalny pakiet (str).
     - client_private_key_b64 - tutaj wstaw stary klucz prywatny z orginalnej notatki
     """
+    #błąd jest w tym że pakiety nie pobierają starych wartośći np string lub bytes(title) tylko to co jest w pamięci egs <corutine.....>
+    #kurwa jak zmienić 
+    
     # Pobierz aktualny lokalny pakiet
+
+    old_tags= await note_repo.get_note_by_id(note_id)
     local_pkg = await get_use_case.execute(note_id)
+    title_pkg = await get_use_case.title_execute(note_id)
+    
     if local_pkg is None or local_pkg == "None":
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
 
@@ -121,14 +137,16 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
         priv_bytes = base64.b64decode(key_priv)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid base64 for client_private_key_b64")
-
     try:
         _current_plain = encryption_service.decrypt_with_private(local_pkg.encode(), priv_bytes)
+        title_plain= encryption_service.decrypt_with_private(title_pkg.encode(), priv_bytes)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"client decryption failed: {e}")
+        raise HTTPException(status_code=400, detail=f"tutaj się coś psuje: {e}")
 
     # Używamy new_plaintext jako treści do zapisania
     new_plaintext = edit.new_plaintext
+    replace_title=new_title if new_title is not None else title_plain
+    new_tag=new_tags if new_tags is not None else old_tags.tags if old_tags is not None else None
 
     # Generujemy nową parę kluczy klienta i szyfrujemy plaintext lokalnie
     new_priv, new_pub = encryption_service.generate_nacl_keypair()
@@ -137,8 +155,16 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
     new_local_package_bytes = encryption_service.encrypt_for_recipient(new_plaintext, new_pub)
     new_local_package = new_local_package_bytes.decode()
 
+    new_local_title_bytes = encryption_service.encrypt_for_recipient(replace_title,new_pub)
+    new_local_title = new_local_title_bytes.decode()
+
     # Zapisz: edit_use_case oczekuje lokalnego pakietu jako string i nowego klucza
-    updated_note = await edit_use_case.execute(note_id, new_local_package, new_client_private_key_b64=new_priv_b64)
+    updated_note = await edit_use_case.execute(
+        note_id,
+        new_local_package,
+        new_client_private_key_b64=new_priv_b64,
+        new_title=new_local_title,
+        new_tags=new_tag)
     if updated_note is None:
         raise HTTPException(status_code=500, detail="failed to update note")
 
@@ -148,6 +174,8 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str):
         "new_client_public_key_b64": base64.b64encode(new_pub).decode(),
         "new_local_encrypted": new_local_package,
         "plaintext_saved": new_plaintext,
+        "new_title":replace_title,
+        "tags":new_tag,
     }
 
 
@@ -162,17 +190,27 @@ async def get_all_notes():
     if not all_notes:
         raise HTTPException(status_code=404)
     for note in all_notes:
+        
         decrypted_content = await get_use_case.execute(note.id)
+        decrypt_title = await get_use_case.title_execute(note.id)
+
         prive_key=base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
+
         try:
-            decrypted_content = encryption_service.decrypt_with_private(decrypted_content.encode(), prive_key) if prive_key else "No private key stored"
+
+            decrypted_content = encryption_service.decrypt_with_private(decrypted_content.encode(), prive_key) if prive_key else "No private key stored"  
+            decrypt_title = encryption_service.decrypt_with_private(decrypt_title.encode(), prive_key) if prive_key else "No private key stored"   
+
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło ")
+            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło {e}")
+        
         result.append(
             {
-            "id": note.id, 
+            "id": note.id,
+            "title": decrypt_title,
             "content": decrypted_content,
-            "private_key": note.key_private_b64
+            "tags":note.tags,
+            "private_key": note.key_private_b64,
             }
             )
     return result

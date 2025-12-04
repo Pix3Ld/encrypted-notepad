@@ -3,12 +3,18 @@ from typing import Optional
 @dataclass
 class Note:
     id:int
+    title: bytes
     content:bytes #dla lepszego bezpieczeństwa danych
-    key_private_b64: Optional[str] = None  # base64-encoded client private key 
+    created_at: Optional[float] = None  # timestamp 
+    tags: Optional[str] = None
+    key_private_b64: Optional[str] = None  # base64-encoded client private key
 
 @dataclass
 class Trash:
     id: int
+    title: bytes
     content: bytes
+    tags: Optional[str] = None
+    created_at: Optional[float] = None
     trashed_at: Optional[float] = None
     key_private_b64: Optional[str] = None  # base64-encoded client private key

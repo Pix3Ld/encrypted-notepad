@@ -24,7 +24,7 @@ class InMemoryTrashRepository(TrashRepository):
         restored = await self.get_trashed_note_by_id(note_id)
         if restored:
             self._trashed.remove(restored)
-            note = Note(id=restored.id, content=restored.content, key_private_b64=restored.key_private_b64)
+            note = Note(id=restored.id, content=restored.content, key_private_b64=restored.key_private_b64,title=restored.title,tags=restored.tags,)
             return note
         return None
 

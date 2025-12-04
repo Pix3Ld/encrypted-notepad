@@ -19,10 +19,13 @@ class InMemoryNoteRepository(NoteRepository):
         '''daje wszystkie informacje z bazy dosłownie wszystkie'''
         return self._notes
     
-    async def update_notes(self, note_id: int, new_content: bytes) ->Optional[Note]:
+    async def update_notes(self, note_id: int, new_content: bytes,new_title: Optional[str], new_tags: Optional[str]=None,created_at: Optional[float]=None) ->Optional[Note]:
         note = await self.get_note_by_id(note_id)
         if note:
             note.content=new_content
+            note.title=new_title if new_title is not None else note.title
+            note.tags=new_tags if new_tags is not None else note.tags
+            note.created_at=created_at if created_at is not None else note.created_at
             return note
         return None
     

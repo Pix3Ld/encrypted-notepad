@@ -120,8 +120,6 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str,new_title: str |
     - Zwraca nowy prywatny klucz klienta (base64), publiczny klucz (base64) i nowy lokalny pakiet (str).
     - client_private_key_b64 - tutaj wstaw stary klucz prywatny z orginalnej notatki
     """
-    #błąd jest w tym że pakiety nie pobierają starych wartośći np string lub bytes(title) tylko to co jest w pamięci egs <corutine.....>
-    #kurwa jak zmienić 
     
     # Pobierz aktualny lokalny pakiet
 

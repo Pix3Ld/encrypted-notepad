@@ -11,7 +11,7 @@ class CreateNoteUseCase:
         self.repo = repo
         self.encryption = encryption
     
-    async def execute(self, local_encrypted_content: str,title:str, client_private_key_b64: Optional[str] = None,tag: Optional[str] = None) -> Note:
+    async def execute(self, local_encrypted_content: str,title:str, client_private_key_b64: Optional[str] = None,tags: Optional[str] = None) -> Note:
         '''wykorzystuje encryption service do ponownego zaszyfrowania notatki.
         wysłanej z klienta i zapisuje ją w repozytorium. Przechowuje też klucz prywatny klienta.'''
         encrypted_for_server = self.encryption.encryptserver(local_encrypted_content)
@@ -20,7 +20,7 @@ class CreateNoteUseCase:
         note = Note(
             id=len(all_notes) + 1, 
             title=encrypted_title,
-            tags=tag,
+            tags=tags,
             created_at=time.time(),
             content=encrypted_for_server,
             key_private_b64=client_private_key_b64,

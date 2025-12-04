@@ -40,7 +40,9 @@ permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
 self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
 # Schemy FastAPI
 class NoteIn(BaseModel):
+    title: str
     content: str  # zaszyfrowany lokalnie tekst
+    tags: Optional[str]=None
 
 
 class NoteEdit(BaseModel):
@@ -63,7 +65,7 @@ async def create(note_in: NoteIn):
     lokalny_pakiet=lokalny_pakiet_szyfrowany.decode()
     
     # Pass private key to use case so it gets stored in the note
-    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64)
+    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64, title=note_in.title, tags=note_in.tags)
     
     return {
         "id": note.id, 

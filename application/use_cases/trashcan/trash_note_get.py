@@ -13,3 +13,9 @@ class TrashGetterUseCase:
         if not trashed_note:
             return "None"
         return self._encryption.decryptserver(trashed_note.content)
+    async def execute_title(self,note_id:int)->str:
+        '''odszyfruj dla widoku '''
+        trashed_note=await self._trash_can.get_trashed_note_by_id(note_id)
+        if not trashed_note:
+            return "None"
+        return self._encryption.decryptserver(trashed_note.title)

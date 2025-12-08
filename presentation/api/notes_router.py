@@ -42,7 +42,7 @@ self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
 class NoteIn(BaseModel):
     title: str
     content: str  # zaszyfrowany lokalnie tekst
-    tags: Optional[str]=None
+    
 
 
 class NoteEdit(BaseModel):
@@ -50,7 +50,7 @@ class NoteEdit(BaseModel):
 
 
 @router.post("/")
-async def create(note_in: NoteIn):
+async def create(note_in: NoteIn,tag:str|None = None):
     ''' tworzy notatkę:
     - generuje parę kluczy NaCl (prywatny i publiczny) dla klienta
     - szyfruje zawartość notatki lokalnie (hybrydowo) przy użyciu klucza publicznego klienta
@@ -67,7 +67,7 @@ async def create(note_in: NoteIn):
     lokalny_title=lokalny_title_szyfrowany.decode()
     
     # Pass private key to use case so it gets stored in the note
-    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64, title=lokalny_title,tags=note_in.tags)
+    note = await create_use_case.execute(lokalny_pakiet, client_private_key_b64=client_priv_b64, title=lokalny_title,tags=tag)
     
     return {
         "id": note.id, 
@@ -233,14 +233,21 @@ async def get_trashed_notes():
     trashed = await trash_repo.get_all_trashed()
     result = []
     for note in trashed:
+
         decrypted = await trash_getter_use_case.execute(note.id)
+        decrypted_title = await trash_getter_use_case.execute_title(note.id)
+
         privkey=base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
         try:
-            decrypt= encryption_service.decrypt_with_private(decrypted.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+
+            decrypt = encryption_service.decrypt_with_private(decrypted.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+            decrypt_title = encryption_service.decrypt_with_private(decrypted_title.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
         result.append({
             "id": note.id,
+            "title":decrypt_title,
             "content": decrypt,
             "trashed_at": note.trashed_at,
             "private_key": note.key_private_b64

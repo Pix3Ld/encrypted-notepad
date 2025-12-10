@@ -2,6 +2,9 @@ from typing import List, Optional
 from domain.entities import Note
 from domain.interfaces import NoteRepository
 
+
+# UWAGA: created_at przechowujemy jako 'dd-mm-yy' (string)
+
 class InMemoryNoteRepository(NoteRepository):
     def __init__(self):
         '''a tu jest pamięc naszej bazy danych in_memory'''
@@ -19,7 +22,7 @@ class InMemoryNoteRepository(NoteRepository):
         '''daje wszystkie informacje z bazy dosłownie wszystkie'''
         return self._notes
     
-    async def update_notes(self, note_id: int, new_content: bytes,new_title: Optional[bytes], new_tags: Optional[str]=None,created_at: Optional[float]=None) ->Optional[Note]:
+    async def update_notes(self, note_id: int, new_content: bytes,new_title: Optional[bytes], new_tags: Optional[str]=None,created_at: Optional[str]=None) ->Optional[Note]:
         note = await self.get_note_by_id(note_id)
         if note:
             note.content=new_content

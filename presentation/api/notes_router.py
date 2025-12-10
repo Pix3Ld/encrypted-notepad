@@ -1,13 +1,13 @@
 import base64
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional,Any,cast
 
 from application.use_cases.create_note import CreateNoteUseCase
 from application.use_cases.get_note import GetNoteUseCase
 from application.use_cases.edit_note import EditNoteUseCase
 
-
+from datetime import datetime, date
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
 from application.use_cases.trashcan.trash_restore import TrashRestoreUseCase
@@ -15,6 +15,7 @@ from application.use_cases.trashcan.trash_perament import PermamentDelitionUseCa
 
 from application.services.encryption_service import EncryptionService
 from application.services.self_delete_x_time import Delete_X_Time
+from application.services.fitering import FilteringService, NotesFilter
 
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
 from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
@@ -38,6 +39,7 @@ trash_getter_use_case = TrashGetterUseCase(trash_repo, encryption_service)
 trash_restore_use_case = TrashRestoreUseCase(note_repo, trash_repo)
 permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
 self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
+filtering_service = FilteringService()
 # Schemy FastAPI
 class NoteIn(BaseModel):
     title: str
@@ -77,6 +79,7 @@ async def create(note_in: NoteIn,tag:str|None = None):
         "title":note.title.decode(),
         "tags":note.tags,
         "local_encrypted": lokalny_pakiet,
+        "created_at": note.created_at,
         }
 
 
@@ -107,6 +110,7 @@ async def get(note_id: int,klucz_prywatny:str):
         "content": text,
         "title": file_name,
         "tags": tag.tags if tag is not None else None,
+        "created_at": tag.created_at if tag is not None else None
         }
 
 
@@ -145,7 +149,7 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str,new_title: str |
     new_plaintext = edit.new_plaintext
     replace_title=new_title if new_title is not None else title_plain
     new_tag=new_tags if new_tags is not None else old_tags.tags if old_tags is not None else None
-
+    
     # Generujemy nową parę kluczy klienta i szyfrujemy plaintext lokalnie
     new_priv, new_pub = encryption_service.generate_nacl_keypair()
     new_priv_b64 = base64.b64encode(new_priv).decode()
@@ -209,6 +213,7 @@ async def get_all_notes():
             "content": decrypted_content,
             "tags":note.tags,
             "private_key": note.key_private_b64,
+            "created_at": note.created_at,
             }
             )
     return result
@@ -284,3 +289,57 @@ async def auto_delete(id_note:int):
     if not to_perma:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje w koszu lub czas nie minął")
     return "notatka usunięta autoamtycznie"
+
+@router.post("/filter")
+async def filter_notes_endpoint(title:str | None=None, tag: str | None=None, date_eq: str | None=None, date_from: str | None=None, date_to: str | None=None):
+    """Filtruje notatki po tytule, tagu i dacie utworzenia (dd-mm-yy)."""
+    try:
+        
+        filters = NotesFilter(
+            title=title,
+            tag=tag,
+            date_eq=cast(date,date_eq),
+            date_from=cast(date,date_from),
+            date_to=cast(date,date_to),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
+
+    notes = await filtering_service.filter_notes(note_repo, filters)
+    # Zwracamy metadane, bez odszyfrowywania treści (jak inne listujące endpointy)
+    return [
+        {
+            "id": n.id,
+            "title": n.title.decode() if isinstance(n.title, (bytes, bytearray)) else n.title,
+            "tags": n.tags,
+            "created_at": n.created_at,
+        }
+        for n in notes
+    ]
+
+
+@router.post("/trash/filter")
+async def filter_trash_endpoint(title:str | None=None, tag: str | None=None, date_eq: str | None=None, date_from: str | None=None, date_to: str | None=None):
+    """Filtruje kosz po tytule, tagu i dacie utworzenia (created_at w Trash)."""
+    try:
+        filters = NotesFilter(
+            title=title,
+            tag=tag,
+            date_eq=cast(date,date_eq),
+            date_from=cast(date,date_from),
+            date_to=cast(date,date_to),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
+
+    trashed = await filtering_service.filter_trash(trash_repo, filters)
+    return [
+        {
+            "id": t.id,
+            "title": t.title.decode() if isinstance(t.title, (bytes, bytearray)) else t.title,
+            "tags": t.tags,
+            "created_at": t.created_at,
+            "trashed_at": t.trashed_at,
+        }
+        for t in trashed
+    ]

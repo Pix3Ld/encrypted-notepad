@@ -1,6 +1,6 @@
 from domain.interfaces import TrashRepository
 from typing import Optional
-import time
+from datetime import datetime
 
 ''' 
 na potem:
@@ -31,11 +31,19 @@ class Delete_X_Time:
         if trashed is None:
             return False
 
-        trashed_at: Optional[float] = getattr(trashed, "trashed_at", None)# pobierz czas przeniesienia do kosza o ile istnieje
+        trashed_at: Optional[str] = getattr(trashed, "trashed_at", None)  # data przeniesienia do kosza w formacie 'dd-mm-yy'
         if trashed_at is None:
             return False
 
-        if time.time() >= trashed_at + self._ttl:
+        # Konwersja 'dd-mm-yy' na datę i porównanie z TTL (dni -> sekundy).
+        try:
+            t_dt = datetime.strptime(trashed_at, "%d-%m-%y")
+        except Exception:
+            return False
+        # ttl_seconds interpretujemy nadal jako sekundy – dodajemy do daty (początek dnia) offset sekund.
+        epoch_seconds = t_dt.timestamp()
+        now_seconds = datetime.now().timestamp()
+        if now_seconds >= epoch_seconds + self._ttl:
             return await self._trash.delete_trashed_note_permanently(note_id)
 
         return False

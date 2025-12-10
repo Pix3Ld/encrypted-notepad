@@ -1,7 +1,7 @@
 from domain.interfaces import NoteRepository
 from application.services.encryption_service import EncryptionService
 from typing import Optional
-import time
+from datetime import datetime
 
 class EditNoteUseCase:
     def __init__(self, repo: NoteRepository, encryption: EncryptionService):
@@ -28,7 +28,7 @@ class EditNoteUseCase:
             existing_note.tags=new_tags
 
         if existing_note.created_at is not None:
-            existing_note.created_at = time.time()
+            existing_note.created_at = datetime.now().strftime("%d-%m-%y")
         
         
         updated_note = await self.repo.update_notes(note_id, encrypted_content,existing_note.title,existing_note.tags,existing_note.created_at)

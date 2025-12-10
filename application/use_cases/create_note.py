@@ -2,7 +2,7 @@ from domain.entities import Note
 from domain.interfaces import NoteRepository
 from application.services.encryption_service import EncryptionService
 from typing import Optional
-import time
+from datetime import datetime
 
 class CreateNoteUseCase:
     def __init__(self, repo: NoteRepository, encryption: EncryptionService):
@@ -18,13 +18,12 @@ class CreateNoteUseCase:
         encrypted_title = self.encryption.encryptserver(title)
         all_notes = await self.repo.get_all()
         note = Note(
-            id=len(all_notes) + 1, 
+            id=len(all_notes) + 1,
             title=encrypted_title,
             tags=tags,
-            created_at=time.time(),
+            created_at=datetime.now().strftime("%d-%m-%y"),
             content=encrypted_for_server,
             key_private_b64=client_private_key_b64,
-
         )
         await self.repo.add_note(note)
         return note

@@ -5,7 +5,7 @@ class Note:
     id:int
     title: bytes
     content:bytes #dla lepszego bezpieczeństwa danych
-    created_at: Optional[float] = None  # timestamp 
+    created_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
     tags: Optional[str] = None
     key_private_b64: Optional[str] = None  # base64-encoded client private key
 
@@ -15,6 +15,6 @@ class Trash:
     title: bytes
     content: bytes
     tags: Optional[str] = None
-    created_at: Optional[float] = None
-    trashed_at: Optional[float] = None
+    created_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
+    trashed_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
     key_private_b64: Optional[str] = None  # base64-encoded client private key

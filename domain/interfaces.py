@@ -16,7 +16,7 @@ class NoteRepository(ABC):
         """zgarnij wszystkie notatki"""
         pass
     @abstractmethod
-    async def update_notes(self,note_id:int,new_content:bytes,new_title: Optional[bytes], new_tags: Optional[str]=None,created_at: Optional[float]=None) ->Optional[Note]:
+    async def update_notes(self,note_id:int,new_content:bytes,new_title: Optional[bytes], new_tags: Optional[str]=None,created_at: Optional[str]=None) ->Optional[Note]:
         '''zmień zawartość ,opcjonalnie zmień tytuł i tagi '''
         pass
     @abstractmethod

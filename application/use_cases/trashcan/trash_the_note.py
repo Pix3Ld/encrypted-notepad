@@ -1,5 +1,5 @@
 from domain.entities import Note, Trash
-import time
+from datetime import datetime
 from domain.interfaces import NoteRepository, TrashRepository
 
 
@@ -17,7 +17,7 @@ class TrashNoteUseCase:
             trashed = Trash(
                 id=note.id, 
                 content=note.content, 
-                trashed_at=time.time(), 
+                trashed_at=datetime.now().strftime("%d-%m-%y"), 
                 key_private_b64=note.key_private_b64, 
                 title=note.title, 
                 tags=note.tags, 

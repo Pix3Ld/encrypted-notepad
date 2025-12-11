@@ -2,20 +2,24 @@ import base64
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional,Any,cast
-
-from application.use_cases.create_note import CreateNoteUseCase
-from application.use_cases.get_note import GetNoteUseCase
-from application.use_cases.edit_note import EditNoteUseCase
-
 from datetime import datetime, date
+
+from application.use_cases.notes.create_note import CreateNoteUseCase
+from application.use_cases.notes.get_note import GetNoteUseCase
+from application.use_cases.notes.edit_note import EditNoteUseCase
+from application.use_cases.notes.notes_filtering import FilterNotesUseCase
+
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
 from application.use_cases.trashcan.trash_restore import TrashRestoreUseCase
 from application.use_cases.trashcan.trash_perament import PermamentDelitionUseCase
+from application.use_cases.trashcan.filter_trash import FilterTrashUseCase
 
 from application.services.encryption_service import EncryptionService
 from application.services.self_delete_x_time import Delete_X_Time
-from application.services.fitering import FilteringService, NotesFilter
+
+from application.services.filtering.filter_dto import NotesFilter
+from application.services.filtering.filtering_service import FilteringService #one thing to files
 
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
 from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
@@ -39,13 +43,12 @@ trash_getter_use_case = TrashGetterUseCase(trash_repo, encryption_service)
 trash_restore_use_case = TrashRestoreUseCase(note_repo, trash_repo)
 permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
 self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
-filtering_service = FilteringService()
+filtering_service = FilteringService(encryption_service,note_repo,trash_repo)
 # Schemy FastAPI
 class NoteIn(BaseModel):
     title: str
     content: str  # zaszyfrowany lokalnie tekst
     
-
 
 class NoteEdit(BaseModel):
     new_plaintext: str  # nowa treść (plaintext) którą zapiszemy i ponownie zaszyfrujemy
@@ -294,7 +297,6 @@ async def auto_delete(id_note:int):
 async def filter_notes_endpoint(title:str | None=None, tag: str | None=None, date_eq: str | None=None, date_from: str | None=None, date_to: str | None=None):
     """Filtruje notatki po tytule, tagu i dacie utworzenia (dd-mm-yy)."""
     try:
-        
         filters = NotesFilter(
             title=title,
             tag=tag,
@@ -310,7 +312,7 @@ async def filter_notes_endpoint(title:str | None=None, tag: str | None=None, dat
     return [
         {
             "id": n.id,
-            "title": n.title.decode() if isinstance(n.title, (bytes, bytearray)) else n.title,
+            "title": n.title,
             "tags": n.tags,
             "created_at": n.created_at,
         }

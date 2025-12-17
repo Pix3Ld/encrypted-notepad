@@ -306,18 +306,26 @@ async def filter_notes_endpoint(title:str | None=None, tag: str | None=None, dat
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
-
+    
     notes = await filtering_service.filter_notes(note_repo, filters)
-    # Zwracamy metadane, bez odszyfrowywania treści (jak inne listujące endpointy)
-    return [
-        {
-            "id": n.id,
-            "title": n.title,
-            "tags": n.tags,
-            "created_at": n.created_at,
-        }
-        for n in notes
-    ]
+    
+
+    for note in notes:
+        title_decrypt=await get_use_case.title_execute(note.id)
+        content_decrypt=await get_use_case.execute(note.id)
+        
+        privkey=base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
+
+        decrypt_title=encryption_service.decrypt_with_private(title_decrypt.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        content_decrypt=encryption_service.decrypt_with_private(content_decrypt.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        return {
+                "id": note.id,
+                "title": decrypt_title,
+                "content": content_decrypt,
+                "tags": note.tags,
+                "private_key": note.key_private_b64,
+                "created_at": note.created_at,
+            }
 
 
 @router.post("/trash/filter")
@@ -335,13 +343,20 @@ async def filter_trash_endpoint(title:str | None=None, tag: str | None=None, dat
         raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
 
     trashed = await filtering_service.filter_trash(trash_repo, filters)
-    return [
-        {
-            "id": t.id,
-            "title": t.title.decode() if isinstance(t.title, (bytes, bytearray)) else t.title,
-            "tags": t.tags,
-            "created_at": t.created_at,
-            "trashed_at": t.trashed_at,
-        }
-        for t in trashed
-    ]
+
+    for trash in trashed:
+        title_decrypt=await get_use_case.title_execute(trash.id)
+        content_decrypt=await get_use_case.execute(trash.id)
+        
+        privkey=base64.b64decode(trash.key_private_b64) if trash.key_private_b64 else None
+
+        decrypt_title=encryption_service.decrypt_with_private(title_decrypt.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        content_decrypt=encryption_service.decrypt_with_private(content_decrypt.encode(),privkey) if privkey else "nie ma klucza prywatnego"
+        return {
+                "id": trash.id,
+                "title": decrypt_title,
+                "content": content_decrypt,
+                "tags": trash.tags,
+                "private_key": trash.key_private_b64,
+                "created_at": trash.created_at,
+            }

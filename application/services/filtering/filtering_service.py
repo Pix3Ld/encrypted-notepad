@@ -1,15 +1,14 @@
-from typing import List, Optional
+from typing import List, Optional,cast
 import base64
 
 from domain.entities import Note, Trash
-from domain.interfaces import NoteRepository, TrashRepository
+from domain.interfaces import NoteRepository, TrashRepository, FilteringServiceInterface
 
 from application.common.utils import parse_created_at_str,tags_to_list
 from application.services.filtering.filter_dto import NotesFilter
 from application.services.encryption_service import EncryptionService
-from typing import cast
 
-class FilteringService:
+class FilteringService(FilteringServiceInterface):
     def __init__(self, encryption_service:EncryptionService,note_repo:NoteRepository,trash_repo:TrashRepository):
         self.encryption = encryption_service
         self.note=note_repo

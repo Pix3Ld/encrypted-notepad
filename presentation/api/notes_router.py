@@ -8,22 +8,27 @@ from application.use_cases.notes.create_note import CreateNoteUseCase
 from application.use_cases.notes.get_note import GetNoteUseCase
 from application.use_cases.notes.edit_note import EditNoteUseCase
 from application.use_cases.notes.notes_filtering import FilterNotesUseCase
+from application.use_cases.notes.search_notes import SearchNotesUseCase
 
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
 from application.use_cases.trashcan.trash_restore import TrashRestoreUseCase
 from application.use_cases.trashcan.trash_perament import PermamentDelitionUseCase
 from application.use_cases.trashcan.filter_trash import FilterTrashUseCase
+from application.use_cases.trashcan.search_trash import SearchTrashUseCase
 
 from application.services.encryption_service import EncryptionService
 from application.services.self_delete_x_time import Delete_X_Time
 
 from application.services.filtering.filter_dto import NotesFilter
 from application.services.filtering.filtering_service import FilteringService #one thing to files
+from application.services.search.search_dto import NotesSearchQuery
+from application.services.search.search_service import SearchService
 
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
 from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
 from infrastructure.config.settings import settings
+
 
 router=APIRouter(prefix="/notes",tags=["notes"])
 
@@ -44,6 +49,11 @@ trash_restore_use_case = TrashRestoreUseCase(note_repo, trash_repo)
 permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
 self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
 filtering_service = FilteringService(encryption_service,note_repo,trash_repo)
+search_service = SearchService(encryption_service, note_repo, trash_repo)
+
+# Search use cases
+search_notes_use_case = SearchNotesUseCase(note_repo, search_service)
+search_trash_use_case = SearchTrashUseCase(trash_repo, search_service)
 # Schemy FastAPI
 class NoteIn(BaseModel):
     title: str
@@ -257,6 +267,7 @@ async def get_trashed_notes():
             "id": note.id,
             "title":decrypt_title,
             "content": decrypt,
+            "created_at":note.created_at,
             "trashed_at": note.trashed_at,
             "private_key": note.key_private_b64
         })
@@ -360,3 +371,90 @@ async def filter_trash_endpoint(title:str | None=None, tag: str | None=None, dat
                 "private_key": trash.key_private_b64,
                 "created_at": trash.created_at,
             }
+
+
+@router.post("/search")
+async def search_notes_endpoint(query: str):
+    """Wyszukuje notatki po zapytaniu (luźne dopasowanie w tytule, treści i tagach).
+    
+    Wyszukiwanie jest case-insensitive i częściowe - jeśli wpiszesz np. "cze",
+    znajdzie wszystkie notatki zawierające "cze" w tytule, treści lub tagach
+    (np. "Czech", "czekolada", "position" itp.).
+    """
+    try:
+        search_query = NotesSearchQuery(query=query)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Błędne parametry wyszukiwania: {e}")
+    
+    notes = await search_notes_use_case.execute(search_query)
+    
+    if not notes:
+        return []
+    
+    result = []
+    for note in notes:
+        title_decrypt = await get_use_case.title_execute(note.id)
+        content_decrypt = await get_use_case.execute(note.id)
+        
+        privkey = base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
+        
+        try:
+            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
+        
+        result.append({
+            "id": note.id,
+            "title": decrypt_title,
+            "content": decrypt_content,
+            "tags": note.tags,
+            "private_key": note.key_private_b64,
+            "created_at": note.created_at,
+        })
+    
+    return result
+
+
+@router.post("/trash/search")
+async def search_trash_endpoint(query: str):
+    """Wyszukuje notatki w koszu po zapytaniu (luźne dopasowanie w tytule, treści i tagach).
+    
+    Wyszukiwanie jest case-insensitive i częściowe - jeśli wpiszesz np. "cze",
+    znajdzie wszystkie notatki w koszu zawierające "cze" w tytule, treści lub tagach
+    (np. "Czech", "czekolada", "position" itp.).
+    """
+    try:
+        search_query = NotesSearchQuery(query=query)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Błędne parametry wyszukiwania: {e}")
+    
+    trashed = await search_trash_use_case.execute(search_query)
+    
+    if not trashed:
+        return []
+    
+    result = []
+    for trash in trashed:
+        title_decrypt = await trash_getter_use_case.execute_title(trash.id)
+        content_decrypt = await trash_getter_use_case.execute(trash.id)
+        
+        privkey = base64.b64decode(trash.key_private_b64) if trash.key_private_b64 else None
+        
+        try:
+            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
+        
+        result.append({
+            "id": trash.id,
+            "title": decrypt_title,
+            "content": decrypt_content,
+            "tags": trash.tags,
+            "private_key": trash.key_private_b64,
+            "created_at": trash.created_at,
+            "trashed_at": trash.trashed_at,
+        })
+    
+    return result

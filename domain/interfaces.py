@@ -2,11 +2,12 @@ from .entities import Note, Trash
 from typing import List, Optional
 from abc import ABC, abstractmethod
 
-# Forward declaration for type hints
+# Deklaracja do przodu dla typu
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from application.services.search.search_dto import NotesSearchQuery
     from application.services.filtering.filter_dto import NotesFilter
+    #from application.services.exporting.export_dto import
 
 class NoteRepository(ABC):
     @abstractmethod
@@ -53,66 +54,80 @@ class TrashRepository(ABC):
 
 
 class SearchServiceInterface(ABC):
-    """Interface for search service operations.
+    """Interface dla search service operations.
 
-    Defines the contract for searching notes by query string with loose matching.
+    definuje szukanie notes przez query string z 'loose matching'.
     """
 
     @abstractmethod
     async def search_notes(self, repo: NoteRepository, search_query: "NotesSearchQuery") -> List[Note]:
-        """Search for notes matching the query.
+        """szuaknie dla notes == query.
 
-        Args:
-            repo: Repository for accessing notes
-            search_query: DTO containing the search query string
+        argumenty:
+            repo: Repository dla dostępu do notes
+            search_query: DTO zawierający wysukiwane query string
 
-        Returns:
-            List of notes where the query appears in title, content, or tags
+        zwraca:
+            Liste notes gdzie query pojawia się w title, content, or tags
         """
         pass
 
     @abstractmethod
     async def search_trash(self, repo: TrashRepository, search_query: "NotesSearchQuery") -> List[Trash]:
-        """Search for trashed notes matching the query.
+        """szuaknie dla trash == query.
 
-        Args:
-            repo: Repository for accessing trashed notes
-            search_query: DTO containing the search query string
+        argumenty:
+            repo: Repository dla dostępu do trash
+            search_query: DTO zawierający wysukiwane query string
 
-        Returns:
-            List of trashed notes where the query appears in title, content, or tags
+        zwraca:
+            Liste trash gdzie query pojawia się w title, content, or tags
         """
         pass
 
 
 class FilteringServiceInterface(ABC):
-    """Interface for filtering service operations.
+    """Interface dla filtering operacji service.
 
-    Defines the contract for filtering notes by exact matching on title, tag, and date.
+    definuje filtering dla notes dla wartości dokładnie rónej title, tag, and date.
     """
 
     @abstractmethod
     async def filter_notes(self, repo: NoteRepository, filters: "NotesFilter") -> List[Note]:
-        """Filter notes by title, tag, and date.
+        """Filter notes przez title, tag, oraz date.
 
-        Args:
-            repo: Repository for accessing notes
-            filters: DTO containing filter criteria
+        argumenty:
+            repo: Repository dla dostępu do notes
+            filters: DTO zawierający wymogi filter 
 
-        Returns:
-            List of notes matching all filter criteria
+        zwraca:
+            Liste notes przez porównianie wszystkich kryteriów filtrowania 
         """
         pass
 
     @abstractmethod
     async def filter_trash(self, repo: TrashRepository, filters: "NotesFilter") -> List[Trash]:
-        """Filter trashed notes by title, tag, and date.
+        """Filter trash przez title, tag, oraz date.
+
+        argumenty:
+            repo: Repository dla dostępu do trash
+            filters: DTO zawierający wymogi filter 
+
+        zwraca:
+            Liste trash przez porównianie wszystkich kryteriów filtrowania
+        """
+        pass
+
+class ExportServiceInterface(ABC):
+    @abstractmethod
+    async def exporting(self, note_id: int, repo: NoteRepository) -> tuple[str, str]:
+        """exportowanie danych z notes do pliku tekstowego 
 
         Args:
-            repo: Repository for accessing trashed notes
-            filters: DTO containing filter criteria
-
+            note_id: ID notatki do wyeksportowania
+            repo: Repository dla dostępu do notes
+            
         Returns:
-            List of trashed notes matching all filter criteria
+            Tuple zawierający (ścieżka do pliku, nazwa pliku)
         """
         pass

@@ -1,5 +1,7 @@
 import base64
+import os
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional,Any,cast
 from datetime import datetime, date
@@ -9,6 +11,7 @@ from application.use_cases.notes.get_note import GetNoteUseCase
 from application.use_cases.notes.edit_note import EditNoteUseCase
 from application.use_cases.notes.notes_filtering import FilterNotesUseCase
 from application.use_cases.notes.search_notes import SearchNotesUseCase
+from application.use_cases.notes.export_note import ExportNoteUseCase
 
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
@@ -24,6 +27,8 @@ from application.services.filtering.filter_dto import NotesFilter
 from application.services.filtering.filtering_service import FilteringService #one thing to files
 from application.services.search.search_dto import NotesSearchQuery
 from application.services.search.search_service import SearchService
+from application.services.exporting.export_service import ExportingService
+from application.services.exporting.export_dto import NotesExport
 
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
 from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
@@ -50,10 +55,14 @@ permament_delete_use_case = PermamentDelitionUseCase(trash_repo)
 self_delete_service = Delete_X_Time(trash_repo, ttl_seconds=4)
 filtering_service = FilteringService(encryption_service,note_repo,trash_repo)
 search_service = SearchService(encryption_service, note_repo, trash_repo)
+export_service = ExportingService(note_repo, encryption_service)
 
 # Search use cases
 search_notes_use_case = SearchNotesUseCase(note_repo, search_service)
 search_trash_use_case = SearchTrashUseCase(trash_repo, search_service)
+
+# Export use case
+export_note_use_case = ExportNoteUseCase(note_repo, export_service)
 # Schemy FastAPI
 class NoteIn(BaseModel):
     title: str
@@ -95,7 +104,6 @@ async def create(note_in: NoteIn,tag:str|None = None):
         "created_at": note.created_at,
         }
 
-
 @router.get("/{note_id}")#pobierz konkretną notke
 async def get(note_id: int,klucz_prywatny:str):
     '''pobieranie notatek dla wskazanego ID:
@@ -125,7 +133,6 @@ async def get(note_id: int,klucz_prywatny:str):
         "tags": tag.tags if tag is not None else None,
         "created_at": tag.created_at if tag is not None else None
         }
-
 
 @router.patch("/{note_id}")
 async def update_note(note_id: int, edit: NoteEdit,key_priv:str,new_title: str |None=None ,new_tags: str |None=None): #wywalenie optional z tag u tytułu
@@ -192,7 +199,6 @@ async def update_note(note_id: int, edit: NoteEdit,key_priv:str,new_title: str |
         "new_title":replace_title,
         "tags":new_tag,
     }
-
 
 @router.get("/")#pobierz wszystko
 async def get_all_notes():
@@ -372,7 +378,6 @@ async def filter_trash_endpoint(title:str | None=None, tag: str | None=None, dat
                 "created_at": trash.created_at,
             }
 
-
 @router.post("/search")
 async def search_notes_endpoint(query: str):
     """Wyszukuje notatki po zapytaniu (luźne dopasowanie w tytule, treści i tagach).
@@ -414,7 +419,6 @@ async def search_notes_endpoint(query: str):
         })
     
     return result
-
 
 @router.post("/trash/search")
 async def search_trash_endpoint(query: str):
@@ -458,3 +462,30 @@ async def search_trash_endpoint(query: str):
         })
     
     return result
+
+@router.get("/export/{note_id}")
+async def export_note_endpoint(note_id: int):
+    """Eksportuje notatkę do pliku tekstowego.
+    
+    - Odszyfrowuje tytuł i zawartość notatki
+    - Tworzy plik .txt o nazwie równej tytułowi notatki
+    - Zawartość pliku to odszyfrowana treść notatki
+    - Zwraca plik do pobrania
+    """
+    try:
+        export_request = NotesExport(note_id=note_id)
+        file_path, filename = await export_note_use_case.execute(export_request)
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=500, detail="Nie udało się utworzyć pliku")
+        
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="text/plain",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Błąd podczas eksportu: {str(e)}")

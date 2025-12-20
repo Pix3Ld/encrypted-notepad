@@ -1,8 +1,9 @@
 import os
 from cryptography.fernet import Fernet
-
+from dotenv import load_dotenv
 class Settings:
     def __init__(self):
+        load_dotenv()
         env_key = os.getenv("SERVER_KEY")
         if env_key:
             # oczekujemy base64-encoded key (string)

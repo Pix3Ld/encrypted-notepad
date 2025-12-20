@@ -47,3 +47,29 @@ class Delete_X_Time:
             return await self._trash.delete_trashed_note_permanently(note_id)
 
         return False
+
+    async def execute_all(self) -> int:
+        """Automatycznie usuwa wszystkie notatki w koszu, które przekroczyły czas życia (TTL).
+        
+        Returns:
+            Liczba trwale usuniętych notatek
+        """
+        all_trashed = await self._trash.get_all_trashed()
+        deleted_count = 0
+        now_seconds = datetime.now().timestamp()
+
+        for trashed in all_trashed:
+            trashed_at: Optional[str] = getattr(trashed, "trashed_at", None)
+            if trashed_at is None:
+                continue
+
+            try:
+                t_dt = datetime.strptime(trashed_at, "%d-%m-%y")
+                epoch_seconds = t_dt.timestamp()
+                if now_seconds >= epoch_seconds + self._ttl:
+                    if await self._trash.delete_trashed_note_permanently(trashed.id):
+                        deleted_count += 1
+            except Exception:
+                continue
+
+        return deleted_count

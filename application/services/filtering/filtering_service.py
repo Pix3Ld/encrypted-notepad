@@ -85,7 +85,17 @@ class FilteringService(FilteringServiceInterface):
         )
 
     async def filter_notes(self, repo: NoteRepository, filters: NotesFilter) -> List[Note]:
-        return [n for n in await repo.get_all() if self._match_note(n, filters,n.id)]
+        all_notes = await repo.get_all()
+        matching_notes = []
+        for note in all_notes:
+            if await self._match_note(note, filters, note.id):
+                matching_notes.append(note)
+        return matching_notes
 
     async def filter_trash(self, repo: TrashRepository, filters: NotesFilter) -> List[Trash]:
-        return [t for t in await repo.get_all_trashed() if self._match_trash(t, filters,t.id)]
+        all_trash = await repo.get_all_trashed()
+        matching_trash = []
+        for trash in all_trash:
+            if await self._match_trash(trash, filters, trash.id):
+                matching_trash.append(trash)
+        return matching_trash

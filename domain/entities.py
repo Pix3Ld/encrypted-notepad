@@ -18,3 +18,11 @@ class Trash:
     created_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
     trashed_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
     key_private_b64: Optional[str] = None  # base64-encoded client private key
+
+
+@dataclass
+class User:
+    id: int
+    email: str
+    password_hash: str
+    created_at: Optional[str] = None

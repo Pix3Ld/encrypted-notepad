@@ -7,6 +7,8 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from fastapi import Depends
+from fastapi import HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, HTTPBasic, HTTPBasicCredentials
 
 from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
 from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
@@ -18,6 +20,8 @@ from application.services.filtering.filtering_service import FilteringService
 from application.services.search.search_service import SearchService
 from application.services.exporting.export_service import ExportingService
 from application.services.self_delete_x_time import Delete_X_Time
+from infrastructure.repositories.in_memory_user_repo import InMemoryUserRepository
+from application.services.user_service import UserService
 
 from application.use_cases.notes.create_note import CreateNoteUseCase
 from application.use_cases.notes.get_note import GetNoteUseCase
@@ -185,4 +189,57 @@ def get_search_trash_use_case(
 ) -> SearchTrashUseCase:
     """Get search trash use case."""
     return SearchTrashUseCase(trash_repo, search_service)
+
+
+# User dependencies
+@lru_cache()
+def get_user_repository() -> InMemoryUserRepository:
+    """Get in-memory user repository (singleton)."""
+    return InMemoryUserRepository()
+
+
+@lru_cache()
+def get_user_service() -> UserService:
+    """Get user service configured with JWT settings."""
+    repo = get_user_repository()
+    return UserService(repo, settings.JWT_SECRET, settings.JWT_EXP_SECONDS)
+
+
+# OAuth2 scheme for dependency
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/token")
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme), user_service: UserService = Depends(get_user_service)):
+    """Dependency that returns the current user if token is valid, otherwise raises 401."""
+    data = user_service.decode_token(token)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+    user_id = data.get("sub")
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+    # repo method returns user or None
+    user = await user_service._repo.get_by_id(int(user_id))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+# Temporary hard-coded basic auth for notes lockdown (username: adda, password: adda)
+basic_security = HTTPBasic()
+
+
+async def get_hardcoded_auth(credentials: HTTPBasicCredentials = Depends(basic_security)):
+    """Temporary dependency that allows access only for hard-coded credentials.
+
+    Use HTTP Basic auth with username 'adda' and password 'adda'.
+    """
+    correct_user = "adda"
+    correct_pass = "adda"
+    if credentials.username == correct_user and credentials.password == correct_pass:
+        return {"email": credentials.username}
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers={"WWW-Authenticate": "Basic"},
+    )
 

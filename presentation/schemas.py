@@ -70,3 +70,20 @@ class MessageResponse(BaseModel):
     """Schema for simple message responses."""
     message: str
 
+
+class UserIn(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    token_type: str
+    user_token: str
+    expires: Optional[str]
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    created_at: Optional[str] = None
+

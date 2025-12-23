@@ -15,4 +15,12 @@ class Settings:
             print("WARNING: No SERVER_KEY in environment — generated ephemeral key.")
             print("Set SERVER_KEY env to persist across restarts:", key.decode())
 
+        # JWT settings
+        self.JWT_SECRET = os.getenv("JWT_SECRET", "i")
+        # expiration in seconds
+        try:
+            self.JWT_EXP_SECONDS = int(os.getenv("JWT_EXP_SECONDS", "3600"))
+        except ValueError:
+            self.JWT_EXP_SECONDS = 3600
+
 settings = Settings()

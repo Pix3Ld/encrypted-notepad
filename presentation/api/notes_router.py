@@ -31,7 +31,7 @@ from application.use_cases.trashcan.trash_perament import PermamentDelitionUseCa
 from application.use_cases.trashcan.filter_trash import FilterTrashUseCase
 from application.use_cases.trashcan.search_trash import SearchTrashUseCase
 
-router = APIRouter(prefix="/notes", tags=["notes"])
+router = APIRouter(prefix="/notes", tags=["notes"], dependencies=[Depends(deps.get_hardcoded_auth)])
 
 
 @router.post("/", response_model=dict)

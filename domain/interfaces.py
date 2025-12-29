@@ -4,11 +4,8 @@ from datetime import datetime
 from uuid import UUID
 
 from .entities import Note, Trash, User
-
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from application.services.search.search_dto import NotesSearchQuery
-    from application.services.filtering.filter_dto import NotesFilter
+from application.services.search.search_dto import NotesSearchQuery
+from application.services.filtering.filter_dto import NotesFilter
 
 
 class NoteRepository(ABC):

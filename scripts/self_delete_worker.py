@@ -52,8 +52,14 @@ async def _handle_signals():
     return await stop
 
 async def main():
-    asyncio.create_task(run_worker())
-    await _handle_signals()
+    # Run the worker as a task and wait for signals
+    worker_task = asyncio.create_task(run_worker())
+    signal_future = await _handle_signals()
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
 
 if __name__ == "__main__":
     asyncio.run(main())

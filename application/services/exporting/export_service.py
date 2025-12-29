@@ -1,9 +1,9 @@
-from typing import Optional, cast
 import base64
-import os
 import tempfile
+import os
+from uuid import UUID
+from typing import Optional, cast
 
-from domain.entities import Note
 from domain.interfaces import NoteRepository, ExportServiceInterface
 from application.services.encryption_service import EncryptionService
 
@@ -25,7 +25,7 @@ class ExportingService(ExportServiceInterface):
         self.encryption = encryption
         self.repo = repo
 
-    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int) -> Optional[str]:
+    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int,user_uuid:UUID) -> Optional[str]:
         """Odszyfrowuje tytuł notatki.
         
         Args:
@@ -40,7 +40,7 @@ class ExportingService(ExportServiceInterface):
             return None
         
         try:
-            note = await self.repo.get_note_by_id(note_id)
+            note = await self.repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if note and note.title == title_bytes and note.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, note.key_private_b64))
                 tit_dec = self.encryption.decrypt_server(title_bytes)
@@ -51,7 +51,7 @@ class ExportingService(ExportServiceInterface):
         
         return None
     
-    async def _decrypt_content(self, content_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int) -> Optional[str]:
+    async def _decrypt_content(self, content_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int,user_uuid:UUID) -> Optional[str]:
         """Odszyfrowuje zawartość notatki.
         
         Args:
@@ -66,7 +66,7 @@ class ExportingService(ExportServiceInterface):
             return None
         
         try:
-            note = await self.repo.get_note_by_id(note_id)
+            note = await self.repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if note and note.content == content_bytes and note.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, key_private_b64))
                 content_dec = self.encryption.decrypt_server(content_bytes)
@@ -77,7 +77,7 @@ class ExportingService(ExportServiceInterface):
         
         return None
 
-    async def exporting(self, note_id: int, repo: NoteRepository) -> tuple[str, str]:
+    async def export(self, note_id: int, repo: NoteRepository, user_uuid: UUID) -> tuple[str, str]:
         """Exportuje notatkę do pliku tekstowego.
         
         Args:
@@ -90,13 +90,13 @@ class ExportingService(ExportServiceInterface):
         Raises:
             ValueError: Jeśli notatka nie istnieje lub odszyfrowanie się nie powiodło
         """
-        note = await repo.get_note_by_id(note_id)
+        note = await repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
         if not note:
             raise ValueError(f"Notatka o ID {note_id} nie istnieje")
 
         # Odszyfruj tytuł i zawartość
-        decrypted_title = await self._decrypt_title(note.title, note.key_private_b64, note_id)
-        decrypted_content = await self._decrypt_content(note.content, note.key_private_b64, note_id)
+        decrypted_title = await self._decrypt_title(note.title, note.key_private_b64, note_id,user_uuid)
+        decrypted_content = await self._decrypt_content(note.content, note.key_private_b64, note_id,user_uuid)
 
         if not decrypted_title or not decrypted_content:
             raise ValueError("Nie udało się odszyfrować tytułu lub zawartości notatki")

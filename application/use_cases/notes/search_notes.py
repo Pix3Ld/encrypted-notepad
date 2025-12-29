@@ -22,6 +22,7 @@ class SearchNotesUseCase:
         self.repo = repo
         self.search_service = search_service
 
+
     async def execute(self, search_query: NotesSearchQuery) -> List[Note]:
         """Execute the search operation.
         
@@ -31,5 +32,5 @@ class SearchNotesUseCase:
         Returns:
             List of notes matching the search query
         """
-        return await self.search_service.search_notes(self.repo, search_query)
+        return await self.search_service.search_notes(self.repo, search_query,user_uuid=search_query.user_uuid)
 

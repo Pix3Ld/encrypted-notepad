@@ -1,6 +1,7 @@
 import os
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
+from uuid import UUID
 
 from presentation import dependencies as deps
 
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/export", tags=["exporting"], dependencies=[Depends(d
 @router.get("/export/{note_id}")
 async def export_note_endpoint(
     note_id: int,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     export_note_use_case: ExportNoteUseCase = Depends(deps.get_export_note_use_case),
 ):
     """Eksportuje notatkę do pliku tekstowego.
@@ -26,7 +28,7 @@ async def export_note_endpoint(
     - Zwraca plik do pobrania
     """
     try:
-        export_request = NotesExport(note_id=note_id)
+        export_request = NotesExport(note_id=note_id, user_uuid=user_uuid)
         file_path, filename = await export_note_use_case.execute(export_request)
 
         if not os.path.exists(file_path):

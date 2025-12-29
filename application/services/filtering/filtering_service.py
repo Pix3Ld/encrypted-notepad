@@ -1,5 +1,6 @@
-from typing import List, Optional,cast
 import base64
+from uuid import UUID
+from typing import List, Optional,cast
 
 from domain.entities import Note, Trash
 from domain.interfaces import NoteRepository, TrashRepository, FilteringServiceInterface
@@ -14,9 +15,9 @@ class FilteringService(FilteringServiceInterface):
         self.note=note_repo
         self.trash=trash_repo
 
-    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str],id:int) -> Optional[str]:
-        nota = await self.note.get_note_by_id(id)
-        trash = await self.trash.get_trashed_note_by_id(id)
+    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str],id:int,user_uuid:UUID) -> Optional[str]:
+        nota = await self.note.get_by_id(note_id=id,user_uuid=user_uuid)
+        trash = await self.trash.get_by_id(note_id=id,user_uuid=user_uuid)
         if nota is not None:
             print("DEBUG: brak title_bytes lub key_private_b64")
             if nota.title==title_bytes:
@@ -40,10 +41,10 @@ class FilteringService(FilteringServiceInterface):
             print("DEBUG: brak title_bytes lub key_private_b64")
             return None
 
-    async def _match_by_title(self, title_bytes, key_private_b64: Optional[str], f: NotesFilter,id:int) -> bool:
+    async def _match_by_title(self, title_bytes, key_private_b64: Optional[str], f: NotesFilter,id:int,user_uuid:UUID) -> bool:
         if not f.title:
             return True
-        decrypted = await self._decrypt_title(title_bytes, key_private_b64,id)
+        decrypted = await self._decrypt_title(title_bytes, key_private_b64,id,user_uuid)
         if decrypted is None:
             return False
         return f.title == decrypted
@@ -70,32 +71,32 @@ class FilteringService(FilteringServiceInterface):
 
         return True
 
-    async def _match_note(self, note: Note, f: NotesFilter,id:int) -> bool:
+    async def _match_note(self, note: Note, f: NotesFilter,id:int,*,user_uuid:UUID) -> bool:
         return (
-            await self._match_by_title(note.title, note.key_private_b64, f,id) and
+            await self._match_by_title(note.title, note.key_private_b64, f,id,user_uuid) and
             await self._match_by_tag(note.tags, f) and
             await self._match_by_date(note.created_at, f)
         )
 
-    async def _match_trash(self, trash: Trash, f: NotesFilter,id:int) -> bool:
+    async def _match_trash(self, trash: Trash, f: NotesFilter,id:int,user_uuid:UUID) -> bool:
         return (
-            await self._match_by_title(trash.title, trash.key_private_b64, f,id) and
+            await self._match_by_title(trash.title, trash.key_private_b64, f,id,user_uuid) and
             await self._match_by_tag(trash.tags, f) and
             await self._match_by_date(trash.created_at, f)
         )
 
-    async def filter_notes(self, repo: NoteRepository, filters: NotesFilter) -> List[Note]:
-        all_notes = await repo.get_all()
+    async def filter_notes(self, repo: NoteRepository, filters: NotesFilter,user_uuid:UUID) -> List[Note]:
+        all_notes = await repo.get_all(user_uuid=user_uuid)
         matching_notes = []
         for note in all_notes:
-            if await self._match_note(note, filters, note.id):
+            if await self._match_note(note=note, f=filters, id=note.id,user_uuid=user_uuid):
                 matching_notes.append(note)
         return matching_notes
 
-    async def filter_trash(self, repo: TrashRepository, filters: NotesFilter) -> List[Trash]:
-        all_trash = await repo.get_all_trashed()
+    async def filter_trash(self, repo: TrashRepository, filters: NotesFilter,user_uuid:UUID) -> List[Trash]:
+        all_trash = await repo.get_all(user_uuid=user_uuid)
         matching_trash = []
         for trash in all_trash:
-            if await self._match_trash(trash, filters, trash.id):
+            if await self._match_trash(trash=trash, f=filters, id=cast(int,trash.id),user_uuid=user_uuid):
                 matching_trash.append(trash)
         return matching_trash

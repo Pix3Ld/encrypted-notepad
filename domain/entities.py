@@ -1,28 +1,39 @@
-from dataclasses import dataclass
-from typing import Optional
-@dataclass
-class Note:
-    id:int
-    title: bytes
-    content:bytes #dla lepszego bezpieczeństwa danych
-    created_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
-    tags: Optional[str] = None
-    key_private_b64: Optional[str] = None  # base64-encoded client private key
-
-@dataclass
-class Trash:
-    id: int
-    title: bytes
-    content: bytes
-    tags: Optional[str] = None
-    created_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
-    trashed_at: Optional[str] = None  # data w formacie 'dd-mm-yy'
-    key_private_b64: Optional[str] = None  # base64-encoded client private key
+from datetime import datetime
+from typing import Optional, List
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass
-class User:
+class User(BaseModel):
     id: int
     email: str
     password_hash: str
-    created_at: Optional[str] = None
+    uuid: UUID
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Note(BaseModel):
+    id: int
+    title: bytes
+    content: bytes
+    user_uuid: UUID
+    created_at: Optional[datetime] = None
+    tags: Optional[List[str]] = None
+    key_private_b64: Optional[str] = None
+    public_key_b64: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Trash(BaseModel):
+    id: int
+    title: bytes
+    content: bytes
+    user_uuid: UUID
+    tags: Optional[List[str]] = None
+    created_at: Optional[datetime] = None
+    trashed_at: datetime
+    key_private_b64: Optional[str] = None
+    public_key_b64: Optional[str] = None

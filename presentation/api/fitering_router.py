@@ -2,6 +2,7 @@ import base64
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional, cast
 from datetime import date
+from uuid import UUID
 
 from presentation import dependencies as deps
 
@@ -25,6 +26,7 @@ async def filter_notes_endpoint(
     date_eq: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     filtering_service: FilteringService = Depends(deps.get_filtering_service),
     filter_notes_use_case: FilterNotesUseCase = Depends(deps.get_filter_notes_use_case),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
@@ -39,16 +41,17 @@ async def filter_notes_endpoint(
             date_eq=cast(date, date_eq),
             date_from=cast(date, date_from),
             date_to=cast(date, date_to),
+            user_uuid=user_uuid,
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
 
-    notes = await filtering_service.filter_notes(note_repo, filters)
+    notes = await filtering_service.filter_notes(note_repo, filters, user_uuid)
 
     result = []
     for note in notes:
-        title_decrypt = await get_use_case.title_execute(note.id)
-        content_decrypt = await get_use_case.execute(note.id)
+        title_decrypt = await get_use_case.title_execute(note_id=note.id, user_uuid=user_uuid)
+        content_decrypt = await get_use_case.execute(note_id=note.id, user_uuid=user_uuid)
 
         privkey = base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
 
@@ -73,6 +76,7 @@ async def filter_trash_endpoint(
     date_eq: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     filtering_service: FilteringService = Depends(deps.get_filtering_service),
     filter_trash_use_case: FilterTrashUseCase = Depends(deps.get_filter_trash_use_case),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
@@ -87,16 +91,17 @@ async def filter_trash_endpoint(
             date_eq=cast(date, date_eq),
             date_from=cast(date, date_from),
             date_to=cast(date, date_to),
+            user_uuid=user_uuid,
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Błędne parametry filtrów: {e}")
 
-    trashed = await filtering_service.filter_trash(trash_repo, filters)
+    trashed = await filtering_service.filter_trash(trash_repo, filters, user_uuid)
 
     result = []
     for trash in trashed:
-        title_decrypt = await get_use_case.title_execute(trash.id)
-        content_decrypt = await get_use_case.execute(trash.id)
+        title_decrypt = await get_use_case.title_execute(note_id=trash.id, user_uuid=user_uuid)
+        content_decrypt = await get_use_case.execute(note_id=trash.id, user_uuid=user_uuid)
 
         privkey = base64.b64decode(trash.key_private_b64) if trash.key_private_b64 else None
 

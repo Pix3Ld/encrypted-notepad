@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
+from uuid import UUID
+from domain.interfaces import UserRepository
 
 from passlib.hash import pbkdf2_sha256
 from jose import jwt
@@ -8,8 +10,8 @@ from domain.entities import User
 
 
 class UserService:
-    def __init__(self, repository, jwt_secret: str, jwt_exp_seconds: int):
-        self._repo = repository
+    def __init__(self, repository: UserRepository, jwt_secret: str, jwt_exp_seconds: int):
+        self._repo: UserRepository = repository
         self._jwt_secret = jwt_secret
         self._jwt_exp_seconds = jwt_exp_seconds
 
@@ -19,7 +21,7 @@ class UserService:
             return None
         
         pw_hash = pbkdf2_sha256.hash(password)
-        user = await self._repo.add_user(email=email, password_hash=pw_hash)
+        user = await self._repo.add(username=email, password_hash=pw_hash, created_at=datetime.utcnow())
         return user
 
     async def authenticate_user(self, email: str, password: str) -> Optional[dict]:

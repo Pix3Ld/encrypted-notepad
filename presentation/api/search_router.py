@@ -1,6 +1,7 @@
 import base64
 
 from fastapi import APIRouter, HTTPException, Depends
+from uuid import UUID
 from presentation import dependencies as deps
 
 from application.services.search.search_dto import NotesSearchQuery
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/search", tags=["search"], dependencies=[Depends(deps
 @router.post("/", response_model=list)
 async def search_notes_endpoint(
     query: str,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     search_notes_use_case: SearchNotesUseCase = Depends(deps.get_search_notes_use_case),
     get_use_case: deps.GetNoteUseCase = Depends(deps.get_get_note_use_case),
     encryption_service: deps.EncryptionService = Depends(deps.get_encryption_service),
@@ -29,7 +31,7 @@ async def search_notes_endpoint(
     (np. "Czech", "czekolada", "position" itp.).
     """
     try:
-        search_query = NotesSearchQuery(query=query)
+        search_query = NotesSearchQuery(query=query, user_uuid=user_uuid)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Błędne parametry wyszukiwania: {e}")
 
@@ -40,14 +42,14 @@ async def search_notes_endpoint(
 
     result = []
     for note in notes:
-        title_decrypt = await get_use_case.title_execute(note.id)
-        content_decrypt = await get_use_case.execute(note.id)
+        title_decrypt = await get_use_case.title_execute(note_id=note.id, user_uuid=user_uuid)
+        content_decrypt = await get_use_case.execute(note_id=note.id, user_uuid=user_uuid)
 
         privkey = base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
 
         try:
-            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
-            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey and title_decrypt else "nie ma klucza prywatnego lub danych"
+            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey and content_decrypt else "nie ma klucza prywatnego lub danych"
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
 
@@ -65,6 +67,7 @@ async def search_notes_endpoint(
 @router.post("/trash/", response_model=list)
 async def search_trash_endpoint(
     query: str,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     search_trash_use_case: SearchTrashUseCase = Depends(deps.get_search_trash_use_case),
     trash_getter_use_case: TrashGetterUseCase = Depends(deps.get_trash_getter_use_case),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
@@ -76,7 +79,7 @@ async def search_trash_endpoint(
     (np. "Czech", "czekolada", "position" itp.).
     """
     try:
-        search_query = NotesSearchQuery(query=query)
+        search_query = NotesSearchQuery(query=query, user_uuid=user_uuid)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Błędne parametry wyszukiwania: {e}")
 
@@ -87,14 +90,14 @@ async def search_trash_endpoint(
 
     result = []
     for trash in trashed:
-        title_decrypt = await trash_getter_use_case.execute_title(trash.id)
-        content_decrypt = await trash_getter_use_case.execute(trash.id)
+        title_decrypt = await trash_getter_use_case.execute(note_id=trash.id, user_uuid=user_uuid, field="title")
+        content_decrypt = await trash_getter_use_case.execute(note_id=trash.id, user_uuid=user_uuid, field="content")
 
         privkey = base64.b64decode(trash.key_private_b64) if trash.key_private_b64 else None
 
         try:
-            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
-            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey else "nie ma klucza prywatnego"
+            decrypt_title = encryption_service.decrypt_with_private(title_decrypt.encode(), privkey) if privkey and title_decrypt else "nie ma klucza prywatnego lub danych"
+            decrypt_content = encryption_service.decrypt_with_private(content_decrypt.encode(), privkey) if privkey and content_decrypt else "nie ma klucza prywatnego lub danych"
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"odszyfrowanie nie powiodło się: {e}")
 

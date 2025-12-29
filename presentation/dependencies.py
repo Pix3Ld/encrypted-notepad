@@ -10,17 +10,19 @@ from fastapi import Depends
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, HTTPBasic, HTTPBasicCredentials
 
-from infrastructure.repositories.in_memory_note_repo import InMemoryNoteRepository
-from infrastructure.repositories.in_memory_trash_repo import InMemoryTrashRepository
+from infrastructure.repositories.sql_note_repo import SQLNoteRepository
+from infrastructure.repositories.sql_trash_repo import SQLTrashRepository
 from infrastructure.config.settings import settings
-from domain.interfaces import NoteRepository, TrashRepository
+from domain.interfaces import NoteRepository, TrashRepository, UserRepository
+from domain.entities import User
+from uuid import UUID
 
 from application.services.encryption_service import EncryptionService
 from application.services.filtering.filtering_service import FilteringService
 from application.services.search.search_service import SearchService
 from application.services.exporting.export_service import ExportingService
-from application.services.self_delete_x_time import Delete_X_Time
-from infrastructure.repositories.in_memory_user_repo import InMemoryUserRepository
+from application.services.self_delete_x_time import DeleteXTime
+from infrastructure.repositories.sql_user_repo import SQLUserRepository
 from application.services.user_service import UserService
 
 from application.use_cases.notes.create_note import CreateNoteUseCase
@@ -45,13 +47,13 @@ if TYPE_CHECKING:
 @lru_cache()
 def get_note_repository() -> NoteRepository:
     """Get note repository instance (singleton)."""
-    return InMemoryNoteRepository()
+    return SQLNoteRepository()
 
 
 @lru_cache()
 def get_trash_repository() -> TrashRepository:
     """Get trash repository instance (singleton)."""
-    return InMemoryTrashRepository()
+    return SQLTrashRepository()
 
 
 # Service dependencies
@@ -89,9 +91,9 @@ def get_export_service(
 
 def get_self_delete_service(
     trash_repo: TrashRepository = Depends(get_trash_repository),
-) -> Delete_X_Time:
+) -> DeleteXTime:
     """Get self-delete service instance."""
-    return Delete_X_Time(trash_repo, ttl_seconds=4)
+    return DeleteXTime(trash_repo)
 
 
 # Use case dependencies - Notes
@@ -193,9 +195,9 @@ def get_search_trash_use_case(
 
 # User dependencies
 @lru_cache()
-def get_user_repository() -> InMemoryUserRepository:
-    """Get in-memory user repository (singleton)."""
-    return InMemoryUserRepository()
+def get_user_repository() -> UserRepository:
+    """Get user repository instance (singleton)."""
+    return SQLUserRepository()
 
 
 @lru_cache()
@@ -233,8 +235,8 @@ async def get_hardcoded_auth(credentials: HTTPBasicCredentials = Depends(basic_s
 
     Use HTTP Basic auth with username 'adda' and password 'adda'.
     """
-    correct_user = "adda"
-    correct_pass = "adda"
+    correct_user = "app"
+    correct_pass = "pass"
     if credentials.username == correct_user and credentials.password == correct_pass:
         return {"email": credentials.username}
     raise HTTPException(
@@ -242,4 +244,9 @@ async def get_hardcoded_auth(credentials: HTTPBasicCredentials = Depends(basic_s
         detail="Invalid authentication credentials",
         headers={"WWW-Authenticate": "Basic"},
     )
+
+
+async def get_current_user_uuid(user: User = Depends(get_current_user)) -> UUID:
+    """Dependency that returns the current user's UUID."""
+    return user.uuid
 

@@ -1,5 +1,6 @@
-from typing import List, Optional, cast
 import base64
+from uuid import UUID
+from typing import List, Optional, cast
 
 from domain.entities import Note, Trash
 from domain.interfaces import NoteRepository, TrashRepository, SearchServiceInterface
@@ -23,7 +24,7 @@ class SearchService(SearchServiceInterface):
         self.note_repo = note_repo
         self.trash_repo = trash_repo
 
-    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int) -> Optional[str]:
+    async def _decrypt_title(self, title_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int,user_uuid:UUID) -> Optional[str]:
         """Decrypts note title using hybrid encryption.
         
         Returns None if decryption fails or required data is missing.
@@ -32,14 +33,14 @@ class SearchService(SearchServiceInterface):
             return None
 
         try:
-            note = await self.note_repo.get_note_by_id(note_id)
+            note = await self.note_repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if note and note.title == title_bytes and note.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, note.key_private_b64))
                 title_dec = self.encryption.decrypt_server(title_bytes)
                 priv_decrypt = self.encryption.decrypt_with_private(title_dec.encode(), priv)
                 return priv_decrypt
 
-            trash = await self.trash_repo.get_trashed_note_by_id(note_id)
+            trash = await self.trash_repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if trash and trash.title == title_bytes and trash.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, trash.key_private_b64))
                 trash_title_dec = self.encryption.decrypt_server(trash.title)
@@ -50,7 +51,7 @@ class SearchService(SearchServiceInterface):
 
         return None
 
-    async def _decrypt_content(self, content_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int) -> Optional[str]:
+    async def _decrypt_content(self, content_bytes: Optional[bytes], key_private_b64: Optional[str], note_id: int,user_uuid:UUID) -> Optional[str]:
         """Decrypts note content using hybrid encryption.
         
         Returns None if decryption fails or required data is missing.
@@ -59,14 +60,14 @@ class SearchService(SearchServiceInterface):
             return None
 
         try:
-            note = await self.note_repo.get_note_by_id(note_id)
+            note = await self.note_repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if note and note.content == content_bytes and note.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, note.key_private_b64))
                 content_dec = self.encryption.decrypt_server(content_bytes)
                 priv_decrypt = self.encryption.decrypt_with_private(content_dec.encode(), priv)
                 return priv_decrypt
 
-            trash = await self.trash_repo.get_trashed_note_by_id(note_id)
+            trash = await self.trash_repo.get_by_id(note_id=note_id,user_uuid=user_uuid)
             if trash and trash.content == content_bytes and trash.key_private_b64 == key_private_b64:
                 priv = base64.b64decode(cast(bytes, trash.key_private_b64))
                 trash_content_dec = self.encryption.decrypt_server(trash.content)
@@ -86,16 +87,15 @@ class SearchService(SearchServiceInterface):
             return False
         return query.lower() in text.lower()
 
-    def _matches_tags(self, tags: Optional[str], query: str) -> bool:
+    def _matches_tags(self, tags: List[str], query: str,user_uuid:UUID) -> bool:
         """Checks if any tag contains the query (case-insensitive, partial match).
         
         Returns True if query is found in any tag, False otherwise.
         """
         if not tags:
             return False
-        tag_list = tags_to_list(tags)
         query_lower = query.lower()
-        return any(query_lower in tag for tag in tag_list)
+        return any(query_lower in tag for tag in tags)
 
     async def _note_matches(self, note: Note, search_query: NotesSearchQuery) -> bool:
         """Checks if a note matches the search query.
@@ -103,24 +103,25 @@ class SearchService(SearchServiceInterface):
         Searches in decrypted title, decrypted content, and tags.
         """
         query = search_query.query
+        list_tags: List[str]= note.tags if note.tags is not None else [] 
 
         # Check tags (no decryption needed)
-        if self._matches_tags(note.tags, query):
+        if self._matches_tags(list_tags, query,user_uuid=note.user_uuid):
             return True
 
         # Check title (needs decryption)
-        decrypted_title = await self._decrypt_title(note.title, note.key_private_b64, note.id)
+        decrypted_title = await self._decrypt_title(note.title, note.key_private_b64, note.id,user_uuid=note.user_uuid)
         if decrypted_title and self._matches_query(decrypted_title, query):
             return True
 
         # Check content (needs decryption)
-        decrypted_content = await self._decrypt_content(note.content, note.key_private_b64, note.id)
+        decrypted_content = await self._decrypt_content(note.content, note.key_private_b64, note.id,user_uuid=note.user_uuid)
         if decrypted_content and self._matches_query(decrypted_content, query):
             return True
 
         return False
 
-    async def search_notes(self, repo: NoteRepository, search_query: NotesSearchQuery) -> List[Note]:
+    async def search_notes(self, repo: NoteRepository, search_query: NotesSearchQuery,user_uuid:UUID) -> List[Note]:
         """Searches for notes matching the query.
         
         Returns a list of notes where the query appears in:
@@ -128,8 +129,9 @@ class SearchService(SearchServiceInterface):
         - Content (decrypted)
         - Tags
         """
-        all_notes = await repo.get_all()
+        all_notes = await repo.get_all(user_uuid=user_uuid)
         matching_notes = []
+
 
         for note in all_notes:
             if await self._note_matches(note, search_query):
@@ -137,7 +139,7 @@ class SearchService(SearchServiceInterface):
 
         return matching_notes
 
-    async def search_trash(self, repo: TrashRepository, search_query: NotesSearchQuery) -> List[Trash]:
+    async def search_trash(self, repo: TrashRepository, search_query: NotesSearchQuery,user_uuid:UUID) -> List[Trash]:
         """Searches for trashed notes matching the query.
         
         Returns a list of trashed notes where the query appears in:
@@ -145,26 +147,26 @@ class SearchService(SearchServiceInterface):
         - Content (decrypted)
         - Tags
         """
-        all_trash = await repo.get_all_trashed()
+        all_trash = await repo.get_all(user_uuid=user_uuid)
         matching_trash = []
-
+        
         for trash in all_trash:
             # Reuse similar logic but for Trash entity
             query = search_query.query
-
+            trash_tags: List[str]= trash.tags if trash.tags is not None else []
             # Check tags
-            if self._matches_tags(trash.tags, query):
+            if self._matches_tags(trash_tags, query,user_uuid=trash.user_uuid):
                 matching_trash.append(trash)
                 continue
 
             # Check title
-            decrypted_title = await self._decrypt_title(trash.title, trash.key_private_b64, trash.id)
+            decrypted_title = await self._decrypt_title(trash.title, trash.key_private_b64, trash.id,user_uuid=user_uuid)
             if decrypted_title and self._matches_query(decrypted_title, query):
                 matching_trash.append(trash)
                 continue
 
             # Check content
-            decrypted_content = await self._decrypt_content(trash.content, trash.key_private_b64, trash.id)
+            decrypted_content = await self._decrypt_content(trash.content, trash.key_private_b64, trash.id,user_uuid=user_uuid)
             if decrypted_content and self._matches_query(decrypted_content, query):
                 matching_trash.append(trash)
 

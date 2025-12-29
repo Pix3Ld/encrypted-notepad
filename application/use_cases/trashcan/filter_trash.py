@@ -16,6 +16,7 @@ class FilterTrashUseCase:
         self.repo = repo
         self.filtering = filtering_service
 
+
     async def execute(self, filters: NotesFilter) -> List[Trash]:
         """Execute the filtering operation.
         
@@ -25,4 +26,4 @@ class FilterTrashUseCase:
         Returns:
             List of trashed notes matching the filter criteria
         """
-        return await self.filtering.filter_trash(self.repo, filters)
+        return await self.filtering.filter_trash(self.repo, filters,user_uuid=filters.user_uuid)

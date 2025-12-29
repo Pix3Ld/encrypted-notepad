@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Optional
 from pydantic import BaseModel, validator
-
+from uuid import UUID
 from application.common.utils import DATE_FMT
 
 
@@ -12,7 +12,8 @@ class NotesFilter(BaseModel):
     date_eq: Optional[date] = None
     date_from: Optional[date] = None
     date_to: Optional[date] = None
-
+    
+    user_uuid: UUID
     @validator("date_eq", "date_from", "date_to", pre=True)
     def _coerce_date(cls, value):
         if value is None or isinstance(value, date):
@@ -23,6 +24,13 @@ class NotesFilter(BaseModel):
             except Exception:
                 raise ValueError(f"Invalid date format. Expected {DATE_FMT}")
         return None
+
+    @validator("user_uuid")
+    def _validate_user_uuid(cls, value):
+        """Ensure user_uuid is a valid UUID."""
+        if not isinstance(value, UUID):
+            raise ValueError("user_uuid must be a valid UUID")
+        return value
 
     class Config:
         str_strip_whitespace = True

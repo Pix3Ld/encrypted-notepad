@@ -20,7 +20,7 @@ class SearchTrashUseCase:
             search_service: Service for performing search operations
         """
         self.repo = repo
-        self.search_service = search_service
+        self.search = search_service
 
     async def execute(self, search_query: NotesSearchQuery) -> List[Trash]:
         """Execute the search operation.
@@ -31,5 +31,5 @@ class SearchTrashUseCase:
         Returns:
             List of trashed notes matching the search query
         """
-        return await self.search_service.search_trash(self.repo, search_query)
+        return await self.search.search_trash(self.repo, search_query,user_uuid=search_query.user_uuid)
 

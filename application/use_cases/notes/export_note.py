@@ -20,6 +20,7 @@ class ExportNoteUseCase:
         self.repo = repo
         self.export_service = export_service
 
+
     async def execute(self, export_request: NotesExport) -> tuple[str, str]:
         """Execute the export operation.
         
@@ -32,5 +33,5 @@ class ExportNoteUseCase:
         Raises:
             ValueError: If note doesn't exist or decryption fails
         """
-        return await self.export_service.exporting(export_request.note_id, self.repo)
+        return await self.export_service.export(export_request.note_id, self.repo,user_uuid=export_request.user_uuid)
 

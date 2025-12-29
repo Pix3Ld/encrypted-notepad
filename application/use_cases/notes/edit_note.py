@@ -1,16 +1,25 @@
+from typing import Optional,List
+from datetime import datetime
+from uuid import UUID
 from domain.interfaces import NoteRepository
 from application.services.encryption_service import EncryptionService
-from typing import Optional
-from datetime import datetime
 
 class EditNoteUseCase:
     def __init__(self, repo: NoteRepository, encryption: EncryptionService):
         self.repo = repo
         self.encryption = encryption
 
-    async def execute(self, note_id: int, new_local_encrypted_content: str, new_client_private_key_b64: Optional[str]=None ,new_title:str | None=None, new_tags:str| None=None) -> str:
+    async def execute(self,
+                      *,
+                      note_id: int,
+                      user_uuid:UUID,
+                      new_local_encrypted_content: str,
+                      new_client_private_key_b64: Optional[str]=None ,
+                      new_title:str | None=None,
+                      new_tags:List[str]| None=None
+                      ) -> str:
         '''Edytuje istniejącą notatkę o podanym ID, aktualizując jej zawartość i klucz prywatny.'''                         # zmieniłem z optional na stały zobaczmy co się stanie 
-        existing_note = await self.repo.get_note_by_id(note_id)
+        existing_note = await self.repo.get_by_id(note_id=note_id,user_uuid=user_uuid)  # Pobierz istniejącą notatkę z repozytorium
         if not existing_note:
             return "nie ma notatki"
         
@@ -27,11 +36,18 @@ class EditNoteUseCase:
         if new_tags is not None:
             existing_note.tags=new_tags
 
-        if existing_note.created_at is not None:
-            existing_note.created_at = datetime.now().strftime("%d-%m-%y")
+        
+        existing_note.created_at = datetime.utcnow()
         
         
-        updated_note = await self.repo.update_notes(note_id, encrypted_content,existing_note.title,existing_note.tags,existing_note.created_at)
+        updated_note = await self.repo.update(
+            note_id,
+            user_uuid=user_uuid,
+            content=encrypted_content,
+            title=existing_note.title,
+            tags=existing_note.tags,
+            updated_at=existing_note.created_at
+            )
         
         if updated_note:
             # Also update the key if provided

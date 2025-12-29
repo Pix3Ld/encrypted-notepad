@@ -16,6 +16,7 @@ class FilterNotesUseCase:
         self.repo = repo
         self.filtering = filter_service
     
+    
     async def execute(self, filters: NotesFilter) -> List[Note]:
         """Execute the filtering operation.
         
@@ -25,4 +26,4 @@ class FilterNotesUseCase:
         Returns:
             List of notes matching the filter criteria
         """
-        return await self.filtering.filter_notes(self.repo, filters)
+        return await self.filtering.filter_notes(self.repo, filters,user_uuid=filters.user_uuid)

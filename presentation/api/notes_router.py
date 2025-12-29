@@ -1,6 +1,7 @@
 import base64
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
+from uuid import UUID
 
 from presentation.schemas import NoteIn, NoteEdit
 from presentation import dependencies as deps
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/notes", tags=["notes"], dependencies=[Depends(deps.g
 async def create(
     note_in: NoteIn,
     tag: Optional[str] = None,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     create_use_case: CreateNoteUseCase = Depends(deps.get_create_note_use_case),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
 ):
@@ -37,10 +39,11 @@ async def create(
     lokalny_title = lokalny_title_szyfrowany.decode()
 
     note = await create_use_case.execute(
-        lokalny_pakiet,
+        user_uuid=user_uuid,
+        local_encrypted_content=lokalny_pakiet,
         client_private_key_b64=client_priv_b64,
         title=lokalny_title,
-        tags=tag
+        tags=[tag] if tag else None
     )
 
     return {
@@ -59,6 +62,7 @@ async def create(
 async def get(
     note_id: int,
     klucz_prywatny: str,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
@@ -68,9 +72,9 @@ async def get(
     - Odszyfrowuje lokalny pakiet przy użyciu podanego `klucz_prywatny` (base64).
     - Zwraca ID notatki i odszyfrowany tekst (content).
     """
-    content = await get_use_case.execute(note_id)
-    title = await get_use_case.title_execute(note_id)
-    tag = await note_repo.get_note_by_id(note_id)
+    content = await get_use_case.execute(note_id=note_id, user_uuid=user_uuid)
+    title = await get_use_case.title_execute(note_id=note_id, user_uuid=user_uuid)
+    tag = await note_repo.get_by_id(note_id=note_id, user_uuid=user_uuid)
 
     if content is None:
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
@@ -98,6 +102,7 @@ async def update_note(
     key_priv: str,
     new_title: Optional[str] = None,
     new_tags: Optional[str] = None,
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     get_use_case: deps.GetNoteUseCase = Depends(deps.get_get_note_use_case),
     edit_use_case: EditNoteUseCase = Depends(deps.get_edit_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
@@ -110,9 +115,9 @@ async def update_note(
       zaszyfruje `new_plaintext` lokalnie (hybrydowo) i zapisze wynik na serwerze (serwerowa warstwa Fernet).
     - Zwraca nowy prywatny klucz klienta (base64), publiczny klucz (base64) i nowy lokalny pakiet (str).
     """
-    old_tags = await note_repo.get_note_by_id(note_id)
-    local_pkg = await get_use_case.execute(note_id)
-    title_pkg = await get_use_case.title_execute(note_id)
+    old_tags = await note_repo.get_by_id(note_id=note_id, user_uuid=user_uuid)
+    local_pkg = await get_use_case.execute(note_id=note_id, user_uuid=user_uuid)
+    title_pkg = await get_use_case.title_execute(note_id=note_id, user_uuid=user_uuid)
 
     if local_pkg is None or local_pkg == "None":
         raise HTTPException(status_code=404, detail="Notatka nie istnieje")
@@ -130,7 +135,7 @@ async def update_note(
 
     new_plaintext = edit.new_plaintext
     replace_title = new_title if new_title is not None else title_plain
-    new_tag = new_tags if new_tags is not None else (old_tags.tags if old_tags is not None else None)
+    new_tag = [new_tags] if isinstance(new_tags, str) else (new_tags if new_tags is not None else (old_tags.tags if old_tags is not None else None))
 
     new_priv, new_pub = encryption_service.generate_nacl_keypair()
     new_priv_b64 = base64.b64encode(new_priv).decode()
@@ -142,8 +147,9 @@ async def update_note(
     new_local_title = new_local_title_bytes.decode()
 
     updated_note = await edit_use_case.execute(
-        note_id,
-        new_local_package,
+        note_id=note_id,
+        user_uuid=user_uuid,
+        new_local_encrypted_content=new_local_package,
         new_client_private_key_b64=new_priv_b64,
         new_title=new_local_title,
         new_tags=new_tag
@@ -164,6 +170,7 @@ async def update_note(
 
 @router.get("/", response_model=list)
 async def get_all_notes(
+    user_uuid: UUID = Depends(deps.get_current_user_uuid),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
@@ -172,14 +179,14 @@ async def get_all_notes(
     - Pobiera wszystkie notatki z repozytorium.
     - Dla każdej notatki odszyfrowuje lokalny pakiet przy użyciu przechowywanego klucza prywatnego (jeśli dostępny).
     """
-    all_notes = await note_repo.get_all()
+    all_notes = await note_repo.get_all(user_uuid=user_uuid)
     result = []
     if not all_notes:
         raise HTTPException(status_code=404)
 
     for note in all_notes:
-        decrypted_content = await get_use_case.execute(note.id)
-        decrypt_title = await get_use_case.title_execute(note.id)
+        decrypted_content = await get_use_case.execute(note_id=note.id, user_uuid=user_uuid)
+        decrypt_title = await get_use_case.title_execute(note_id=note.id, user_uuid=user_uuid)
 
         prive_key = base64.b64decode(note.key_private_b64) if note.key_private_b64 else None
 

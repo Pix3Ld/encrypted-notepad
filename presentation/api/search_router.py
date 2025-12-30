@@ -7,6 +7,7 @@ from presentation import dependencies as deps
 from application.services.search.search_dto import NotesSearchQuery
 
 from application.services.encryption_service import EncryptionService
+from application.common.utils import format_datetime_to_str
 
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
 from application.use_cases.trashcan.search_trash import SearchTrashUseCase
@@ -59,7 +60,7 @@ async def search_notes_endpoint(
             "content": decrypt_content,
             "tags": note.tags,
             "private_key": note.key_private_b64,
-            "created_at": note.created_at,
+            "created_at": format_datetime_to_str(note.created_at),
         })
 
     return result
@@ -107,8 +108,8 @@ async def search_trash_endpoint(
             "content": decrypt_content,
             "tags": trash.tags,
             "private_key": trash.key_private_b64,
-            "created_at": trash.created_at,
-            "trashed_at": trash.trashed_at,
+            "created_at": format_datetime_to_str(trash.created_at),
+            "trashed_at": format_datetime_to_str(trash.trashed_at),
         })
 
     return result

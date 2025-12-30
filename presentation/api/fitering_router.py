@@ -12,6 +12,7 @@ from domain.interfaces import  TrashRepository
 from domain.interfaces import NoteRepository
 from application.services.encryption_service import EncryptionService
 from application.services.filtering.filtering_service import FilteringService
+from application.common.utils import format_datetime_to_str
 
 from application.use_cases.notes.get_note import GetNoteUseCase
 from application.use_cases.notes.notes_filtering import FilterNotesUseCase
@@ -63,7 +64,7 @@ async def filter_notes_endpoint(
             "content": content_decrypt,
             "tags": note.tags,
             "private_key": note.key_private_b64,
-            "created_at": note.created_at,
+            "created_at": format_datetime_to_str(note.created_at),
         })
 
     return result
@@ -113,7 +114,7 @@ async def filter_trash_endpoint(
             "content": content_decrypt,
             "tags": trash.tags,
             "private_key": trash.key_private_b64,
-            "created_at": trash.created_at,
+            "created_at": format_datetime_to_str(trash.created_at),
         })
 
     return result

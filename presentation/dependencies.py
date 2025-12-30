@@ -226,24 +226,78 @@ async def get_current_user(token: str = Depends(oauth2_scheme), user_service: Us
     return user
 
 
-# Temporary hard-coded basic auth for notes lockdown (username: adda, password: adda)
+# HTTP Basic Auth that validates against database
 basic_security = HTTPBasic()
 
 
 async def get_hardcoded_auth(credentials: HTTPBasicCredentials = Depends(basic_security)):
-    """Temporary dependency that allows access only for hard-coded credentials.
-
-    Use HTTP Basic auth with username 'adda' and password 'adda'.
+    """HTTP Basic auth that validates credentials against the database.
+    
+    Use HTTP Basic auth with your registered email and password.
     """
-    correct_user = "app"
-    correct_pass = "pass"
-    if credentials.username == correct_user and credentials.password == correct_pass:
-        return {"email": credentials.username}
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid authentication credentials",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+    user_service = get_user_service()
+    
+    # Normalize input
+    email = credentials.username.strip() if credentials.username else ""
+    password = credentials.password.strip() if credentials.password else ""
+    
+    # Debug: print received credentials (remove in production)
+    print(f"HTTP Basic Auth attempt - Email: '{email}'")
+    
+    # Validate against database
+    token_info = await user_service.authenticate_user(email, password)
+    if token_info is None:
+        print(f"HTTP Basic Auth failed for email: '{email}'")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    print(f"HTTP Basic Auth successful for email: '{email}'")
+    # Get user to return UUID if needed
+    user = await user_service._repo.get_by_email(email)
+    if user:
+        return {"email": email, "user_uuid": user.uuid}
+    return {"email": email}
+
+
+async def get_user_uuid_from_basic_auth(credentials: HTTPBasicCredentials = Depends(basic_security)) -> UUID:
+    """HTTP Basic auth that validates credentials and returns user UUID.
+    
+    Use HTTP Basic auth with your registered email and password.
+    This can be used instead of token-based auth for endpoints that need user_uuid.
+    """
+    user_service = get_user_service()
+    
+    # Normalize input
+    email = credentials.username.strip() if credentials.username else ""
+    password = credentials.password.strip() if credentials.password else ""
+    
+    # Debug: print received credentials
+    print(f"HTTP Basic Auth (UUID) attempt - Email: '{email}'")
+    
+    # Validate against database
+    token_info = await user_service.authenticate_user(email, password)
+    if token_info is None:
+        print(f"HTTP Basic Auth (UUID) failed for email: '{email}'")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    # Get user to return UUID
+    user = await user_service._repo.get_by_email(email)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    print(f"HTTP Basic Auth (UUID) successful for email: '{email}', UUID: {user.uuid}")
+    return user.uuid
 
 
 async def get_current_user_uuid(user: User = Depends(get_current_user)) -> UUID:

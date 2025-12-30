@@ -5,6 +5,12 @@ from typing import Optional, List
 DATE_FMT = "%d-%m-%y"
 
 
+def format_datetime_to_str(dt: Optional[datetime]) -> Optional[str]:
+    """Convert datetime to string using DATE_FMT format."""
+    if dt is None:
+        return None
+    return dt.strftime(DATE_FMT)
+
 
 def parse_created_at_str(date_str: Optional[str]) -> Optional[date]:
     if not date_str:

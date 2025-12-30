@@ -8,19 +8,20 @@ from presentation import dependencies as deps
 
 from domain.interfaces import NoteRepository
 from application.services.encryption_service import EncryptionService
+from application.common.utils import format_datetime_to_str
 
 from application.use_cases.notes.create_note import CreateNoteUseCase
 from application.use_cases.notes.get_note import GetNoteUseCase
 from application.use_cases.notes.edit_note import EditNoteUseCase
 
-router = APIRouter(prefix="/notes", tags=["notes"], dependencies=[Depends(deps.get_hardcoded_auth)])
+router = APIRouter(prefix="/notes", tags=["notes"])
 
 
 @router.post("/", response_model=dict)
 async def create(
     note_in: NoteIn,
     tag: Optional[str] = None,
-    user_uuid: UUID = Depends(deps.get_current_user_uuid),
+    user_uuid: UUID = Depends(deps.get_user_uuid_from_basic_auth),
     create_use_case: CreateNoteUseCase = Depends(deps.get_create_note_use_case),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
 ):
@@ -54,7 +55,7 @@ async def create(
         "title": note.title.decode(),
         "tags": note.tags,
         "local_encrypted": lokalny_pakiet,
-        "created_at": note.created_at,
+        "created_at": format_datetime_to_str(note.created_at),
     }
 
 
@@ -62,7 +63,7 @@ async def create(
 async def get(
     note_id: int,
     klucz_prywatny: str,
-    user_uuid: UUID = Depends(deps.get_current_user_uuid),
+    user_uuid: UUID = Depends(deps.get_user_uuid_from_basic_auth),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
@@ -91,7 +92,7 @@ async def get(
         "content": text,
         "title": file_name,
         "tags": tag.tags if tag is not None else None,
-        "created_at": tag.created_at if tag is not None else None
+        "created_at": format_datetime_to_str(tag.created_at) if tag is not None else None
     }
 
 
@@ -102,7 +103,7 @@ async def update_note(
     key_priv: str,
     new_title: Optional[str] = None,
     new_tags: Optional[str] = None,
-    user_uuid: UUID = Depends(deps.get_current_user_uuid),
+    user_uuid: UUID = Depends(deps.get_user_uuid_from_basic_auth),
     get_use_case: deps.GetNoteUseCase = Depends(deps.get_get_note_use_case),
     edit_use_case: EditNoteUseCase = Depends(deps.get_edit_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
@@ -170,7 +171,7 @@ async def update_note(
 
 @router.get("/", response_model=list)
 async def get_all_notes(
-    user_uuid: UUID = Depends(deps.get_current_user_uuid),
+    user_uuid: UUID = Depends(deps.get_user_uuid_from_basic_auth),
     get_use_case: GetNoteUseCase = Depends(deps.get_get_note_use_case),
     note_repo: NoteRepository = Depends(deps.get_note_repository),
     encryption_service: EncryptionService = Depends(deps.get_encryption_service),
@@ -202,7 +203,7 @@ async def get_all_notes(
             "content": decrypted_content,
             "tags": note.tags,
             "private_key": note.key_private_b64,
-            "created_at": note.created_at,
+            "created_at": format_datetime_to_str(note.created_at),
         })
 
     return result

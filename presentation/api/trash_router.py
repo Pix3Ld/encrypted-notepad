@@ -7,6 +7,7 @@ from presentation import dependencies as deps
 
 from domain.interfaces import  TrashRepository
 from application.services.encryption_service import EncryptionService
+from application.common.utils import format_datetime_to_str
 
 from application.use_cases.trashcan.trash_the_note import TrashNoteUseCase
 from application.use_cases.trashcan.trash_note_get import TrashGetterUseCase
@@ -60,9 +61,9 @@ async def get_trashed_notes(
             "id": note.id,
             "title": decrypt_title,
             "content": decrypt,
-            "created_at": note.created_at,
+            "created_at": format_datetime_to_str(note.created_at),
             "tags": note.tags,
-            "trashed_at": note.trashed_at,
+            "trashed_at": format_datetime_to_str(note.trashed_at),
             "private_key": note.key_private_b64
         })
 
